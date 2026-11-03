@@ -168,7 +168,8 @@ export function assertSafeKey(key: string) {
   if (
     !key ||
     key.length > 900 ||
-    /[*?\u0000-\u001f\u007f\\]/.test(key) ||
+    /[*?\\]/.test(key) ||
+    [...key].some((ch) => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127) ||
     key.split("/").some((p) => p === ".." || p === ".")
   )
     throw new Error("Invalid file name or path.");

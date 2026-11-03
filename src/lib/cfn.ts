@@ -9,7 +9,7 @@ export function roleNameFor(externalId: string) {
 
 export function cloudFormationTemplate(platformPrincipalArn: string, externalId: string) {
   // Never emit a wildcard, root, or role trust: only one exact IAM user, and a well-formed External ID.
-  if (!/^arn:aws:iam::\d{12}:user\/[\w+=,.@\/-]+$/.test(platformPrincipalArn))
+  if (!/^arn:aws:iam::\d{12}:user\/[\w+=,.@/-]+$/.test(platformPrincipalArn))
     throw new Error("Platform identity must be a dedicated IAM user ARN");
   if (!/^[a-f0-9]{32,64}$/.test(externalId)) throw new Error("Invalid External ID");
   return `AWSTemplateFormatVersion: "2010-09-09"
