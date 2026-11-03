@@ -4,7 +4,10 @@ import { routeTree } from "./routeTree.gen";
 
 // After a new version goes live, old page chunks disappear. Reload once to fetch the new version
 // instead of showing a blank screen; a sessionStorage flag prevents reload loops.
-if (typeof window !== "undefined" && !(window as { __fluxPreloadGuard?: boolean }).__fluxPreloadGuard) {
+if (
+  typeof window !== "undefined" &&
+  !(window as { __fluxPreloadGuard?: boolean }).__fluxPreloadGuard
+) {
   (window as { __fluxPreloadGuard?: boolean }).__fluxPreloadGuard = true;
   const KEY = "flux-chunk-reload";
   const recover = () => {
@@ -19,7 +22,8 @@ if (typeof window !== "undefined" && !(window as { __fluxPreloadGuard?: boolean 
   });
   window.addEventListener("unhandledrejection", (e) => {
     const msg = String((e.reason as Error | undefined)?.message ?? e.reason ?? "");
-    if (/Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg)) recover();
+    if (/Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg))
+      recover();
   });
 }
 

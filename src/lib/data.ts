@@ -19,7 +19,10 @@ export const q = {
   }),
   links: queryOptions({
     queryKey: ["links"],
-    queryFn: () => rows(supabase.from("links").select("*").order("created_at", { ascending: false }).limit(1000)),
+    queryFn: () =>
+      rows(
+        supabase.from("links").select("*").order("created_at", { ascending: false }).limit(1000),
+      ),
   }),
   rules: queryOptions({
     queryKey: ["rules"],
@@ -31,26 +34,44 @@ export const q = {
   }),
   uploads: queryOptions({
     queryKey: ["uploads"],
-    queryFn: () => rows(supabase.from("uploads").select("*").order("created_at", { ascending: false }).limit(500)),
+    queryFn: () =>
+      rows(
+        supabase.from("uploads").select("*").order("created_at", { ascending: false }).limit(500),
+      ),
   }),
   projects: queryOptions({
     queryKey: ["projects"],
-    queryFn: () => rows(supabase.from("projects").select("*").order("created_at", { ascending: false })),
+    queryFn: () =>
+      rows(supabase.from("projects").select("*").order("created_at", { ascending: false })),
   }),
   activity: queryOptions({
     queryKey: ["activity"],
-    queryFn: () => rows(supabase.from("activity").select("*").order("created_at", { ascending: false }).limit(300)),
+    queryFn: () =>
+      rows(
+        supabase.from("activity").select("*").order("created_at", { ascending: false }).limit(300),
+      ),
   }),
   plans: queryOptions({
     queryKey: ["plans"],
-    queryFn: () => rows(supabase.from("assistant_plans").select("*").order("created_at", { ascending: false }).limit(20)),
+    queryFn: () =>
+      rows(
+        supabase
+          .from("assistant_plans")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(20),
+      ),
   }),
   profile: queryOptions({
     queryKey: ["profile"],
     queryFn: async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return null;
-      const { data } = await supabase.from("profiles").select("*").eq("id", u.user.id).maybeSingle();
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", u.user.id)
+        .maybeSingle();
       return { user: u.user, profile: data };
     },
   }),
@@ -78,14 +99,27 @@ export function errMsg(e: unknown) {
 }
 
 /** Upload with real byte progress via XHR to a presigned PUT URL. */
-export function putWithProgress(url: string, file: Blob, onProgress: (loaded: number) => void) {
+export function putWithProgress(
+  url: string,
+  file: Blob,
+  onProgress: (loaded: number) => void,
+  contentType?: string,
+) {
   return new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
+    if (contentType) xhr.setRequestHeader("Content-Type", contentType);
     xhr.upload.onprogress = (e) => onProgress(e.loaded);
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (HTTP ${xhr.status})`)));
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(`Upload failed (HTTP ${xhr.status})`));
     xhr.onerror = () =>
-      reject(new Error("Upload blocked. Enable browser uploads for this bucket on the Buckets page (it sets CORS for this site)."));
+      reject(
+        new Error(
+          "Upload blocked. Enable browser uploads for this bucket on the Buckets page (it sets CORS for this site).",
+        ),
+      );
     xhr.send(file);
   });
 }

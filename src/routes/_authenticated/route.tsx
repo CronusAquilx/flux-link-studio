@@ -1,4 +1,11 @@
-import { createFileRoute, Link, Outlet, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  redirect,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
@@ -79,7 +86,10 @@ function Layout() {
           </nav>
           <div className="border-t border-sidebar-border pt-3">
             <p className="truncate px-2 text-xs text-muted-foreground">{user.email}</p>
-            <button onClick={signOut} className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
+            <button
+              onClick={signOut}
+              className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+            >
               <LogOut className="h-4 w-4" /> Sign out
             </button>
           </div>
@@ -87,11 +97,23 @@ function Layout() {
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex gap-1 overflow-x-auto border-b border-border p-2 md:hidden">
             {NAV.map((n) => (
-              <Link key={n.to} to={n.to} className={cn("whitespace-nowrap rounded px-2 py-1 text-xs text-muted-foreground", path.startsWith(n.to) && "bg-secondary text-foreground")}>
+              <Link
+                key={n.to}
+                to={n.to}
+                className={cn(
+                  "whitespace-nowrap rounded px-2 py-1 text-xs text-muted-foreground",
+                  path.startsWith(n.to) && "bg-secondary text-foreground",
+                )}
+              >
                 {n.label}
               </Link>
             ))}
-            <button onClick={signOut} className="whitespace-nowrap px-2 text-xs text-muted-foreground">Sign out</button>
+            <button
+              onClick={signOut}
+              className="whitespace-nowrap px-2 text-xs text-muted-foreground"
+            >
+              Sign out
+            </button>
           </div>
           <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-6">
             <Outlet />

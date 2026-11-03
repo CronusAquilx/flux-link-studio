@@ -4,8 +4,22 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createUploadUrlFn, recordUploadFn } from "@/lib/flux.functions";
 import { errMsg, putWithProgress } from "@/lib/data";
 
-export type UploadState = { totalBytes: number; doneBytes: number; totalFiles: number; doneFiles: number; errors: string[]; running: boolean };
-const idle: UploadState = { totalBytes: 0, doneBytes: 0, totalFiles: 0, doneFiles: 0, errors: [], running: false };
+export type UploadState = {
+  totalBytes: number;
+  doneBytes: number;
+  totalFiles: number;
+  doneFiles: number;
+  errors: string[];
+  running: boolean;
+};
+const idle: UploadState = {
+  totalBytes: 0,
+  doneBytes: 0,
+  totalFiles: 0,
+  doneFiles: 0,
+  errors: [],
+  running: false,
+};
 
 /** Uploads files (keeping folder paths) to a bucket via presigned PUT, with real byte progress. */
 export function useUploader() {
@@ -23,8 +37,16 @@ export function useUploader() {
       const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
       const key = `${prefix}${rel}`.replace(/^\/+/, "");
       try {
-        const { url } = await sign({ data: { bucketId, key } });
-        await putWithProgress(url, f, (loaded) => setState((s) => ({ ...s, doneBytes: base + loaded })));
+        const contentType = /^[\w.+-]+\/[\w.+-]+$/.test(f.type)
+          ? f.type
+          : "application/octet-stream";
+        const { url } = await sign({ data: { bucketId, key, size: f.size, contentType } });
+        await putWithProgress(
+          url,
+          f,
+          (loaded) => setState((s) => ({ ...s, doneBytes: base + loaded })),
+          contentType,
+        );
         await record({ data: { bucketId, key, size: f.size } });
         keys.push(key);
         setState((s) => ({ ...s, doneFiles: s.doneFiles + 1 }));

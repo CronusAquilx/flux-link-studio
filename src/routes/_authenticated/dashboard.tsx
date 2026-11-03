@@ -8,7 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useConfirm } from "@/components/Confirm";
 import { useUploader } from "@/components/useUploader";
 import { createLinksFn, listObjectsFn } from "@/lib/flux.functions";
@@ -16,7 +22,12 @@ import { errMsg, fmtBytes, linkUrl, q } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard · Flux Links" }, { name: "description", content: "Make Flux links from your S3 buckets." }] }),
+  head: () => ({
+    meta: [
+      { title: "Dashboard · Flux Links" },
+      { name: "description", content: "Make Flux links from your S3 buckets." },
+    ],
+  }),
   component: Dashboard,
 });
 
@@ -51,13 +62,21 @@ function Dashboard() {
 
   const panelText = useMemo(() => {
     if (fresh) return fresh.join("\n");
-    return links.filter((l) => l.bucket_id === shownBucket && !l.revoked).map(linkUrl).join("\n");
+    return links
+      .filter((l) => l.bucket_id === shownBucket && !l.revoked)
+      .map(linkUrl)
+      .join("\n");
   }, [fresh, links, shownBucket]);
 
   const makeLink = async () => {
     if (!activeBucket) return void toast.error("Connect AWS and add a bucket first");
     if (!files.length) return void toast.error("Choose files or a folder to upload");
-    const prefix = name.trim() ? `${name.trim().replace(/[^\w.\- /]/g, "").replace(/\/+$/, "")}/` : "";
+    const prefix = name.trim()
+      ? `${name
+          .trim()
+          .replace(/[^\w.\- /]/g, "")
+          .replace(/\/+$/, "")}/`
+      : "";
     const ok = await confirm({
       risk: "public",
       title: `Upload ${files.length} file(s) and create links?`,
@@ -68,7 +87,9 @@ function Dashboard() {
     const keys = await upload(activeBucket, files, prefix);
     if (!keys.length) return void toast.error("No files uploaded");
     try {
-      const made = await createLinks({ data: { bucketId: activeBucket, keys, kind, confirmed: true } });
+      const made = await createLinks({
+        data: { bucketId: activeBucket, keys, kind, confirmed: true },
+      });
       setPanelBucket(activeBucket);
       setFresh(made.map(linkUrl));
       setFiles([]);
@@ -82,7 +103,9 @@ function Dashboard() {
   const generateFor = async (id: string) => {
     setBusy(id);
     try {
-      const objs = (await listObjects({ data: { bucketId: id, prefix: "" } })).filter((o) => !o.key.endsWith("/"));
+      const objs = (await listObjects({ data: { bucketId: id, prefix: "" } })).filter(
+        (o) => !o.key.endsWith("/"),
+      );
       if (!objs.length) return void toast.info("This bucket has no files yet");
       const ok = await confirm({
         risk: "public",
@@ -90,7 +113,9 @@ function Dashboard() {
         body: "One link per file in this bucket (first 200). Anyone with a link can download that file until you revoke it.",
       });
       if (!ok) return;
-      const made = await createLinks({ data: { bucketId: id, keys: objs.map((o) => o.key), kind, confirmed: true } });
+      const made = await createLinks({
+        data: { bucketId: id, keys: objs.map((o) => o.key), kind, confirmed: true },
+      });
       setPanelBucket(id);
       setFresh(made.map(linkUrl));
       qc.invalidateQueries({ queryKey: ["links"] });
@@ -118,8 +143,14 @@ function Dashboard() {
       {!verified && (
         <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
           <b>Finish setup:</b> connect your AWS account so Flux Links can reach your buckets.{" "}
-          <Link to="/connections" className="text-primary underline-offset-2 hover:underline">Open Connections →</Link>{" "}
-          or <Link to="/ai" className="text-primary underline-offset-2 hover:underline">ask Flux AI</Link>.
+          <Link to="/connections" className="text-primary underline-offset-2 hover:underline">
+            Open Connections →
+          </Link>{" "}
+          or{" "}
+          <Link to="/ai" className="text-primary underline-offset-2 hover:underline">
+            ask Flux AI
+          </Link>
+          .
         </div>
       )}
 
@@ -131,23 +162,43 @@ function Dashboard() {
               <button
                 key={k}
                 onClick={() => setKind(k)}
-                className={cn("rounded px-3 py-1 text-xs font-medium text-muted-foreground", kind === k && "bg-primary text-primary-foreground")}
+                className={cn(
+                  "rounded px-3 py-1 text-xs font-medium text-muted-foreground",
+                  kind === k && "bg-primary text-primary-foreground",
+                )}
               >
                 {k === "flux_v3" ? "Flux V3" : "Flux Mini"}
               </button>
             ))}
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_11rem]">
-            <Input placeholder="Name (folder for these files)" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
+            <Input
+              placeholder="Name (folder for these files)"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={120}
+            />
             <Select value={activeBucket} onValueChange={setBucketId} disabled={!buckets.length}>
-              <SelectTrigger><SelectValue placeholder="No buckets" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="No buckets" />
+              </SelectTrigger>
               <SelectContent>
-                {buckets.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                {buckets.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <input ref={fileRef} type="file" multiple hidden onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+            />
             <input
               ref={(el) => {
                 dirRef.current = el;
@@ -157,30 +208,52 @@ function Dashboard() {
               hidden
               onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
             />
-            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Paperclip className="h-3.5 w-3.5" /> Files</Button>
-            <Button variant="outline" size="sm" onClick={() => dirRef.current?.click()}><FolderUp className="h-3.5 w-3.5" /> Folder</Button>
-            <span className="text-xs text-muted-foreground">{files.length ? `${files.length} file(s) · ${fmtBytes(pickedBytes)}` : "Nothing selected"}</span>
-            <Button size="sm" className="ml-auto" onClick={makeLink} disabled={up.running}>{up.running ? "Uploading…" : "Make link"}</Button>
+            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+              <Paperclip className="h-3.5 w-3.5" /> Files
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => dirRef.current?.click()}>
+              <FolderUp className="h-3.5 w-3.5" /> Folder
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {files.length
+                ? `${files.length} file(s) · ${fmtBytes(pickedBytes)}`
+                : "Nothing selected"}
+            </span>
+            <Button size="sm" className="ml-auto" onClick={makeLink} disabled={up.running}>
+              {up.running ? "Uploading…" : "Make link"}
+            </Button>
           </div>
           <div className="mt-3 space-y-1">
             <Progress value={pct} className="h-1.5" />
             <div className="flex justify-between font-mono text-[11px] text-muted-foreground">
-              <span>{fmtBytes(up.doneBytes)} / {fmtBytes(up.totalBytes)}</span>
-              <span>{up.doneFiles}/{up.totalFiles} files</span>
+              <span>
+                {fmtBytes(up.doneBytes)} / {fmtBytes(up.totalBytes)}
+              </span>
+              <span>
+                {up.doneFiles}/{up.totalFiles} files
+              </span>
             </div>
-            {up.errors.map((e) => <p key={e} className="text-xs text-destructive">{e}</p>)}
+            {up.errors.map((e) => (
+              <p key={e} className="text-xs text-destructive">
+                {e}
+              </p>
+            ))}
           </div>
         </section>
 
         <section className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Your S3 buckets</h2>
-            <Link to="/buckets" className="text-xs text-muted-foreground hover:text-foreground">Manage</Link>
+            <Link to="/buckets" className="text-xs text-muted-foreground hover:text-foreground">
+              Manage
+            </Link>
           </div>
           <ul className="mt-3 max-h-56 divide-y divide-border overflow-y-auto">
             {bLoading && <li className="py-2 text-xs text-muted-foreground">Loading…</li>}
             {!bLoading && !buckets.length && (
-              <li className="py-2 text-xs text-muted-foreground">No buckets yet. Discover or create them on the Storage page after connecting AWS.</li>
+              <li className="py-2 text-xs text-muted-foreground">
+                No buckets yet. Discover or create them on the Storage page after connecting AWS.
+              </li>
             )}
             {buckets.map((b) => (
               <li key={b.id} className="flex items-center gap-2 py-2">
@@ -188,8 +261,19 @@ function Dashboard() {
                   <p className="truncate font-mono text-sm">{b.name}</p>
                   <p className="text-[11px] text-muted-foreground">{b.region}</p>
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => navigate({ to: "/buckets", search: { b: b.id } })}>Open</Button>
-                <Button size="sm" variant="secondary" disabled={busy === b.id} onClick={() => generateFor(b.id)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => navigate({ to: "/buckets", search: { b: b.id } })}
+                >
+                  Open
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy === b.id}
+                  onClick={() => generateFor(b.id)}
+                >
                   {busy === b.id ? "…" : "Generate links"}
                 </Button>
               </li>
@@ -205,7 +289,12 @@ function Dashboard() {
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} Copy all
           </Button>
         </div>
-        <Textarea readOnly value={panelText} placeholder="Generated links will appear here." className="mt-3 min-h-40 font-mono text-xs" />
+        <Textarea
+          readOnly
+          value={panelText}
+          placeholder="Generated links will appear here."
+          className="mt-3 min-h-40 font-mono text-xs"
+        />
       </section>
     </div>
   );

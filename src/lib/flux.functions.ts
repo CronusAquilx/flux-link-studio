@@ -10,6 +10,8 @@ import {
   listObjects as s3ListObjects,
   presign,
   RECOMMENDED_PERMISSIONS,
+  assertSafeKey,
+  MAX_UPLOAD_BYTES,
 } from "./aws.server";
 import {
   createRule,
@@ -45,7 +47,8 @@ export const getSetupStatus = createServerFn({ method: "GET" })
         // Assumed-role/root identities are not acceptable as the platform identity: require a dedicated IAM user.
         if (!/^arn:aws:iam::\d{12}:user\//.test(id.arn)) {
           platformState = "error";
-          platformError = "The platform keys must belong to a dedicated IAM user (not root or a role).";
+          platformError =
+            "The platform keys must belong to a dedicated IAM user (not root or a role).";
         }
       } catch (e) {
         const c = classifyAwsError(e);
@@ -68,12 +71,23 @@ export const getSetupStatus = createServerFn({ method: "GET" })
 export const createConnectionFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({ label: z.string().min(1).max(80), roleArn: z.string().max(600).default(""), region: z.enum(REGIONS) }).parse(d),
+    z
+      .object({
+        label: z.string().min(1).max(80),
+        roleArn: z.string().max(600).default(""),
+        region: z.enum(REGIONS),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("aws_connections")
-      .insert({ label: data.label, role_arn: data.roleArn.trim(), region: data.region, user_id: context.userId })
+      .insert({
+        label: data.label,
+        role_arn: data.roleArn.trim(),
+        region: data.region,
+        user_id: context.userId,
+      })
       .select()
       .single();
     if (error) throw new Error(error.message);
@@ -85,7 +99,12 @@ export const verifyConnectionFn = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ id: uuid }).parse(d))
   .handler(async ({ data, context }) => {
     const r = await verifyConnection(context.supabase, data.id);
-    await logActivity(context.supabase, context.userId, "connection.verified", `AWS account ${r.account}`);
+    await logActivity(
+      context.supabase,
+      context.userId,
+      "connection.verified",
+      `AWS account ${r.account}`,
+    );
     return r;
   });
 
@@ -94,7 +113,12 @@ export const discoverBucketsFn = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ connectionId: uuid }).parse(d))
   .handler(async ({ data, context }) => {
     const r = await discoverBuckets(context.supabase, data.connectionId);
-    await logActivity(context.supabase, context.userId, "buckets.discovered", `${r.count} bucket(s)`);
+    await logActivity(
+      context.supabase,
+      context.userId,
+      "buckets.discovered",
+      `${r.count} bucket(s)`,
+    );
     return r;
   });
 
@@ -113,47 +137,91 @@ export const provisionBucketFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const b = await provisionBucket(context.supabase, data);
-    await logActivity(context.supabase, context.userId, "bucket.created", `${b.name} (${b.region}, private)`);
+    await logActivity(
+      context.supabase,
+      context.userId,
+      "bucket.created",
+      `${b.name} (${b.region}, private)`,
+    );
     return b;
   });
 
 export const enableBrowserUploadsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ bucketId: uuid, origin: z.string().url(), confirmed: z.literal(true) }).parse(d))
+  .inputValidator((d) =>
+    z.object({ bucketId: uuid, origin: z.string().url(), confirmed: z.literal(true) }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const r = await enableBrowserUploads(context.supabase, data.bucketId, data.origin);
-    await logActivity(context.supabase, context.userId, "bucket.cors", `Browser uploads enabled for ${data.origin}`);
+    await logActivity(
+      context.supabase,
+      context.userId,
+      "bucket.cors",
+      `Browser uploads enabled for ${data.origin}`,
+    );
     return r;
   });
 
 export const listObjectsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ bucketId: uuid, prefix: z.string().max(512).default("") }).parse(d))
+  .inputValidator((d) =>
+    z.object({ bucketId: uuid, prefix: z.string().max(512).default("") }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { bucket, conn } = await getBucket(context.supabase, data.bucketId);
-    const { creds } = await assumeRole(conn, [{ actions: ["s3:ListBucket"], resources: [`arn:aws:s3:::${bucket.name}`] }]);
+    const { creds } = await assumeRole(conn, [
+      { actions: ["s3:ListBucket"], resources: [`arn:aws:s3:::${bucket.name}`] },
+    ]);
     return s3ListObjects(creds, bucket.name, bucket.region, data.prefix);
   });
 
 export const createUploadUrlFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ bucketId: uuid, key: z.string().min(1).max(900) }).parse(d))
+  .inputValidator((d) =>
+    z
+      .object({
+        bucketId: uuid,
+        key: z.string().min(1).max(900),
+        size: z.number().int().min(0).max(MAX_UPLOAD_BYTES),
+        contentType: z
+          .string()
+          .max(200)
+          .regex(/^[\w.+-]+\/[\w.+-]+$/)
+          .default("application/octet-stream"),
+      })
+      .parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { bucket, conn } = await getBucket(context.supabase, data.bucketId);
     const key = data.key.replace(/^\/+/, "");
+    assertSafeKey(key);
     const { creds } = await assumeRole(conn, [
       { actions: ["s3:PutObject"], resources: [`arn:aws:s3:::${bucket.name}/${key}`] },
     ]);
-    return { url: await presign(creds, bucket.name, bucket.region, key, "PUT", 900), key };
+    return {
+      url: await presign(creds, bucket.name, bucket.region, key, "PUT", 900, {
+        contentType: data.contentType,
+        size: data.size,
+      }),
+      key,
+      contentType: data.contentType,
+    };
   });
 
 /** Called after an upload completes: applies enabled automation rules for that bucket. */
 export const recordUploadFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ bucketId: uuid, key: z.string().min(1), size: z.number().int().min(0) }).parse(d))
+  .inputValidator((d) =>
+    z.object({ bucketId: uuid, key: z.string().min(1), size: z.number().int().min(0) }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     await getBucket(context.supabase, data.bucketId);
-    await context.supabase.from("uploads").insert({ user_id: context.userId, bucket_id: data.bucketId, object_key: data.key, size_bytes: data.size });
+    await context.supabase.from("uploads").insert({
+      user_id: context.userId,
+      bucket_id: data.bucketId,
+      object_key: data.key,
+      size_bytes: data.size,
+    });
     const { data: rules } = await context.supabase
       .from("automation_rules")
       .select("*")
@@ -188,7 +256,12 @@ export const createLinksFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const links = await createS3Links(context.supabase, data);
-    await logActivity(context.supabase, context.userId, "links.created", `${links.length} ${data.kind === "flux_v3" ? "Flux V3" : "Flux Mini"} link(s)`);
+    await logActivity(
+      context.supabase,
+      context.userId,
+      "links.created",
+      `${links.length} ${data.kind === "flux_v3" ? "Flux V3" : "Flux Mini"} link(s)`,
+    );
     return links;
   });
 
@@ -219,13 +292,25 @@ export const checkProjectUrlFn = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ url: z.string().url() }).parse(d))
   .handler(async ({ data }) => {
     const u = new URL(data.url);
-    if (u.protocol !== "https:" || !LOVABLE_HOST.test(u.hostname) || u.hostname.startsWith("id-preview--")) {
-      return { ok: false, status: 0, reason: "Use a published https://<name>.lovable.app URL (preview links are not shareable)." };
+    if (
+      u.protocol !== "https:" ||
+      !LOVABLE_HOST.test(u.hostname) ||
+      u.hostname.startsWith("id-preview--")
+    ) {
+      return {
+        ok: false,
+        status: 0,
+        reason: "Use a published https://<name>.lovable.app URL (preview links are not shareable).",
+      };
     }
     try {
       const res = await fetch(u.origin + u.pathname, { method: "GET", redirect: "manual" });
       const ok = res.status >= 200 && res.status < 400;
-      return { ok, status: res.status, reason: ok ? "Reachable" : `The site responded with HTTP ${res.status}.` };
+      return {
+        ok,
+        status: res.status,
+        reason: ok ? "Reachable" : `The site responded with HTTP ${res.status}.`,
+      };
     } catch (e) {
       return { ok: false, status: 0, reason: e instanceof Error ? e.message : "Unreachable" };
     }
@@ -234,29 +319,58 @@ export const checkProjectUrlFn = createServerFn({ method: "POST" })
 export const createProjectLinkFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({ name: z.string().min(1).max(80), url: z.string().url(), kind, confirmed: z.literal(true) }).parse(d),
+    z
+      .object({
+        name: z.string().min(1).max(80),
+        url: z.string().url(),
+        kind,
+        confirmed: z.literal(true),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const u = new URL(data.url);
-    if (u.protocol !== "https:" || !LOVABLE_HOST.test(u.hostname) || u.hostname.startsWith("id-preview--")) {
+    if (
+      u.protocol !== "https:" ||
+      !LOVABLE_HOST.test(u.hostname) ||
+      u.hostname.startsWith("id-preview--")
+    ) {
       throw new Error("Only published https://<name>.lovable.app URLs are accepted.");
     }
     const res = await fetch(u.toString(), { method: "GET", redirect: "manual" }).catch(() => null);
     const status = res?.status ?? 0;
-    if (!res || status >= 400 || status === 0) throw new Error(`That project isn't reachable (HTTP ${status}). Publish it first.`);
+    if (!res || status >= 400 || status === 0)
+      throw new Error(`That project isn't reachable (HTTP ${status}). Publish it first.`);
     const { data: link, error } = await context.supabase
       .from("links")
-      .insert({ user_id: context.userId, slug: makeSlug(data.kind), kind: data.kind, source: "project", target_url: u.toString() })
+      .insert({
+        user_id: context.userId,
+        slug: makeSlug(data.kind),
+        kind: data.kind,
+        source: "project",
+        target_url: u.toString(),
+      })
       .select()
       .single();
     if (error) throw new Error(error.message);
     const { data: proj, error: e2 } = await context.supabase
       .from("projects")
-      .insert({ user_id: context.userId, name: data.name, lovable_url: u.toString(), link_id: link.id, last_check_status: status })
+      .insert({
+        user_id: context.userId,
+        name: data.name,
+        lovable_url: u.toString(),
+        link_id: link.id,
+        last_check_status: status,
+      })
       .select()
       .single();
     if (e2) throw new Error(e2.message);
-    await logActivity(context.supabase, context.userId, "project.linked", `${data.name} → ${u.hostname}`);
+    await logActivity(
+      context.supabase,
+      context.userId,
+      "project.linked",
+      `${data.name} → ${u.hostname}`,
+    );
     return { project: proj, link };
   });
 
@@ -267,7 +381,11 @@ const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("discover_buckets"), params: z.object({ connectionId: uuid }) }),
   z.object({
     type: z.literal("create_bucket"),
-    params: z.object({ connectionId: uuid, name: z.string().regex(BUCKET_RE), region: z.enum(REGIONS) }),
+    params: z.object({
+      connectionId: uuid,
+      name: z.string().regex(BUCKET_RE),
+      region: z.enum(REGIONS),
+    }),
   }),
   z.object({ type: z.literal("enable_browser_uploads"), params: z.object({ bucketId: uuid }) }),
   z.object({
@@ -301,7 +419,11 @@ export const planSetupFn = createServerFn({ method: "POST" })
       context.supabase.from("aws_connections").select("id,label,region,status,role_arn"),
       context.supabase.from("buckets").select("id,name,region,browser_uploads,connection_id"),
     ]);
-    const stateJson = JSON.stringify({ connections: conns ?? [], buckets: buckets ?? [], awsConfiguredOnSite: isPlatformConfigured() });
+    const stateJson = JSON.stringify({
+      connections: conns ?? [],
+      buckets: buckets ?? [],
+      awsConfiguredOnSite: isPlatformConfigured(),
+    });
     const instructions = `You are the Flux Links setup assistant. Plan concrete setup actions for the user's AWS S3 link-sharing setup.
 Only use these action types: verify_connection{connectionId}, discover_buckets{connectionId}, create_bucket{connectionId,name,region}, enable_browser_uploads{bucketId}, create_rule{name,bucketId,prefix,linkKind:"flux_v3"|"flux_mini",expiresDays:number|null}.
 Only reference ids that exist in the provided state. Never invent ids. Buckets Flux creates are always private. If there is no AWS connection, return no actions and explain the user must add one on the Connections page (Flux never accepts root or access keys — only an IAM role with an External ID).
@@ -333,15 +455,29 @@ Current state: ${stateJson}`;
         const r = actionSchema.safeParse(raw);
         if (!r.success) return null;
         const p = r.data.params as Record<string, unknown>;
-        const cid = p["connectionId"], bid = p["bucketId"];
+        const cid = p["connectionId"],
+          bid = p["bucketId"];
         if (typeof cid === "string" && !connIds.has(cid)) return null;
         if (typeof bid === "string" && !bucketIds.has(bid)) return null;
-        const reason = typeof (raw as { reason?: unknown }).reason === "string" ? (raw as { reason: string }).reason : "";
-        return { id: crypto.randomUUID(), ...r.data, reason, risk: RISK[r.data.type], status: "pending", result: null as string | null };
+        const reason =
+          typeof (raw as { reason?: unknown }).reason === "string"
+            ? (raw as { reason: string }).reason
+            : "";
+        return {
+          id: crypto.randomUUID(),
+          ...r.data,
+          reason,
+          risk: RISK[r.data.type],
+          status: "pending",
+          result: null as string | null,
+        };
       })
       .filter((a): a is NonNullable<typeof a> => a !== null)
       .slice(0, 10);
-    const summary = typeof parsed.summary === "string" ? parsed.summary : text.slice(0, 600) || "No plan produced.";
+    const summary =
+      typeof parsed.summary === "string"
+        ? parsed.summary
+        : text.slice(0, 600) || "No plan produced.";
     const { data: plan, error } = await context.supabase
       .from("assistant_plans")
       .insert({ user_id: context.userId, prompt: data.prompt, summary, actions })
@@ -354,13 +490,27 @@ Current state: ${stateJson}`;
 export const runPlanActionFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({ planId: uuid, actionId: uuid, decision: z.enum(["approve", "reject"]), confirmed: z.boolean(), origin: z.string().url() }).parse(d),
+    z
+      .object({
+        planId: uuid,
+        actionId: uuid,
+        decision: z.enum(["approve", "reject"]),
+        confirmed: z.boolean(),
+        origin: z.string().url(),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const sb: Sb = context.supabase;
-    const { data: plan, error } = await sb.from("assistant_plans").select("*").eq("id", data.planId).single();
+    const { data: plan, error } = await sb
+      .from("assistant_plans")
+      .select("*")
+      .eq("id", data.planId)
+      .single();
     if (error || !plan) throw new Error("Plan not found");
-    const actions = plan.actions as Array<PlanAction & { id: string; risk: string; status: string; result: string | null }>;
+    const actions = plan.actions as Array<
+      PlanAction & { id: string; risk: string; status: string; result: string | null }
+    >;
     const a = actions.find((x) => x.id === data.actionId);
     if (!a) throw new Error("Action not found");
     if (a.status !== "pending" && a.status !== "failed") throw new Error("Action already handled");
@@ -373,7 +523,8 @@ export const runPlanActionFn = createServerFn({ method: "POST" })
       return save();
     }
     const checked = actionSchema.parse({ type: a.type, params: a.params });
-    if (RISK[checked.type] !== "safe" && !data.confirmed) throw new Error("This action needs explicit confirmation.");
+    if (RISK[checked.type] !== "safe" && !data.confirmed)
+      throw new Error("This action needs explicit confirmation.");
     try {
       switch (checked.type) {
         case "verify_connection": {
