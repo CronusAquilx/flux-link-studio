@@ -55,9 +55,16 @@ Resources:
                   - s3:CreateBucket
                   - s3:PutBucketPublicAccessBlock
                   - s3:PutEncryptionConfiguration
-                  - s3:PutBucketCORS
                   - s3:PutBucketOwnershipControls
                 Resource: !Sub "arn:aws:s3:::\${BucketPattern}"
+              - Sid: BrowserUploadCors
+                Effect: Allow
+                Action: s3:PutBucketCORS
+                Resource: !Sub "arn:aws:s3:::\${BucketPattern}"
+              - Sid: CorsOnlyOnFluxBuckets
+                Effect: Deny
+                Action: s3:PutBucketCORS
+                NotResource: "arn:aws:s3:::flux-*"
               - Sid: ReadWriteObjects
                 Effect: Allow
                 Action: [s3:GetObject, s3:PutObject]

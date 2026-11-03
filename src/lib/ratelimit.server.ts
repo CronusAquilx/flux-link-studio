@@ -16,7 +16,9 @@ export type LimitName = keyof typeof LIMITS;
 
 export class RateLimitError extends Error {
   constructor(public readonly retryAfterSeconds: number) {
-    super(`Too many requests. Please wait about ${Math.ceil(retryAfterSeconds / 60)} minute(s) and try again.`);
+    super(
+      `Too many requests. Please wait about ${Math.ceil(retryAfterSeconds / 60)} minute(s) and try again.`,
+    );
   }
 }
 

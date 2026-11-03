@@ -16,11 +16,7 @@ export function clampSignSeconds(n: number) {
 }
 
 /** Resolve a Flux link. Privileged lookup by unguessable slug only; never returns row data. */
-export async function resolveLink(
-  slug: string,
-  kind: "flux_v3" | "flux_mini",
-  headers?: Headers,
-) {
+export async function resolveLink(slug: string, kind: "flux_v3" | "flux_mini", headers?: Headers) {
   try {
     const { enforceRateLimit, clientIp } = await import("./ratelimit.server");
     await enforceRateLimit("redirect", { ip: clientIp(headers) });
