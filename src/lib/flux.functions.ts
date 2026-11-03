@@ -3,8 +3,10 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   assumeRole,
+  classifyAwsError,
   getPlatformIdentity,
   isPlatformConfigured,
+  PLATFORM_USER_POLICY,
   listObjects as s3ListObjects,
   presign,
   RECOMMENDED_PERMISSIONS,
@@ -32,18 +34,32 @@ export const getSetupStatus = createServerFn({ method: "GET" })
   .handler(async () => {
     const configured = isPlatformConfigured();
     let platformAccountId: string | null = null;
+    let platformArn: string | null = null;
     let platformError: string | null = null;
+    let platformState: "missing" | "invalid" | "ok" | "error" = configured ? "ok" : "missing";
     if (configured) {
       try {
-        platformAccountId = (await getPlatformIdentity()).account;
+        const id = await getPlatformIdentity();
+        platformAccountId = id.account;
+        platformArn = id.arn;
+        // Assumed-role/root identities are not acceptable as the platform identity: require a dedicated IAM user.
+        if (!/^arn:aws:iam::\d{12}:user\//.test(id.arn)) {
+          platformState = "error";
+          platformError = "The platform keys must belong to a dedicated IAM user (not root or a role).";
+        }
       } catch (e) {
-        platformError = e instanceof Error ? e.message : String(e);
+        const c = classifyAwsError(e);
+        platformState = c.kind === "platform_invalid" ? "invalid" : "error";
+        platformError = c.message;
       }
     }
     return {
       awsConfigured: configured,
+      platformState,
       platformAccountId,
+      platformArn,
       platformError,
+      platformUserPolicy: PLATFORM_USER_POLICY,
       aiConfigured: Boolean(process.env["LOVABLE_API_KEY"]),
       recommendedPermissions: RECOMMENDED_PERMISSIONS("*"),
     };

@@ -41,11 +41,37 @@ function decodeXml(s: string) {
     .replace(/&amp;/g, "&");
 }
 
+export class AwsApiError extends Error {
+  constructor(message: string, public awsCode: string, public status: number) {
+    super(message);
+  }
+}
+
 async function awsError(res: Response, what: string) {
   const body = await res.text();
   const code = xmlTag(body, "Code") ?? `HTTP ${res.status}`;
-  const msg = xmlTag(body, "Message") ?? body.slice(0, 300);
-  return new Error(`${what} failed: ${code} — ${msg}`);
+  const msg = (xmlTag(body, "Message") ?? body.slice(0, 300)).slice(0, 300);
+  return new AwsApiError(`${what} failed: ${code} — ${msg}`, code, res.status);
+}
+
+const INVALID_CRED_CODES = ["InvalidClientTokenId", "SignatureDoesNotMatch", "UnrecognizedClientException", "ExpiredToken", "InvalidAccessKeyId"];
+
+/** Distinguishes platform-credential problems from customer-role problems. Messages never include secrets. */
+export function classifyAwsError(e: unknown):
+  | { kind: "platform_missing" | "platform_invalid" | "role_assume_failed" | "permission_denied" | "other"; message: string } {
+  if (e instanceof SetupRequiredError) return { kind: "platform_missing", message: e.message };
+  if (e instanceof AwsApiError) {
+    if (INVALID_CRED_CODES.includes(e.awsCode))
+      return { kind: "platform_invalid", message: `The site's platform AWS keys were rejected by AWS (${e.awsCode}). The site owner must replace them.` };
+    if (e.message.startsWith("AssumeRole") && (e.awsCode === "AccessDenied" || e.status === 403))
+      return {
+        kind: "role_assume_failed",
+        message: "AWS refused to let Flux Links use your role. Check that the stack was created from the template downloaded for THIS connection (External ID must match), that the Role ARN is correct, and that the stack finished successfully.",
+      };
+    if (e.awsCode === "AccessDenied" || e.status === 403)
+      return { kind: "permission_denied", message: `${e.message.split(":")[0]} was denied. Your role (or its BucketPattern) doesn't allow this bucket or action.` };
+  }
+  return { kind: "other", message: e instanceof Error ? e.message : String(e) };
 }
 
 export async function getPlatformIdentity(): Promise<{ arn: string; account: string }> {
@@ -217,3 +243,11 @@ export const RECOMMENDED_PERMISSIONS = (bucketPattern = "*") => ({
     },
   ],
 });
+
+/** The ONLY permissions Flux's platform IAM user needs: assume customer roles that are named by the template. */
+export const PLATFORM_USER_POLICY = {
+  Version: "2012-10-17",
+  Statement: [
+    { Sid: "AssumeCustomerFluxRoles", Effect: "Allow", Action: "sts:AssumeRole", Resource: "arn:aws:iam::*:role/FluxLinksAccess-*" },
+  ],
+};

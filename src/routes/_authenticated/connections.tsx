@@ -37,7 +37,7 @@ function Connections() {
   const [arns, setArns] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["connections"] });
-  const acct = status.data?.platformAccountId;
+  const acct = status.data?.platformState === "ok" ? status.data.platformArn : null;
 
   const start = async () => {
     setBusy("new");
@@ -92,17 +92,33 @@ function Connections() {
         <p className="text-sm text-muted-foreground">Connect your own AWS account. You create a scoped IAM role in your account; we never ask for root or access keys.</p>
       </div>
 
+      <div className="rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground">
+        Note for site owners: an AWS connection used while <i>building</i> this site does not give the live site any AWS access. The live site only reaches AWS through its own platform IAM user (keys stored as server secrets) plus the role each customer creates below.
+      </div>
+
       {status.isLoading ? (
         <p className="text-sm text-muted-foreground">Checking site configuration…</p>
-      ) : !status.data?.awsConfigured || status.data.platformError ? (
+      ) : status.data?.platformState !== "ok" ? (
         <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
-          <b>AWS connections are not available yet.</b> The site owner still needs to configure the platform's AWS identity on the server.
-          {status.data?.platformError && <p className="mt-1 font-mono text-xs text-muted-foreground">{status.data.platformError}</p>}
-          <p className="mt-1 text-muted-foreground">You can still start a connection below, but the setup template needs the platform account ID, and verification won't work until this is fixed.</p>
+          <b>
+            {status.data?.platformState === "missing" && "AWS isn't configured on this site yet (platform keys missing)."}
+            {status.data?.platformState === "invalid" && "AWS rejected this site's platform keys."}
+            {status.data?.platformState === "error" && "This site's AWS platform identity has a problem."}
+          </b>
+          {status.data?.platformError && <p className="mt-1 text-xs text-muted-foreground">{status.data.platformError}</p>}
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs font-medium">Site owner setup guide</summary>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
+              <li>In your own AWS account, IAM → Users → Create user (e.g. <code>flux-links-platform</code>). No console access.</li>
+              <li>Attach only this inline policy (nothing else):<pre className="mt-1 overflow-x-auto rounded bg-muted p-2 font-mono">{JSON.stringify(status.data?.platformUserPolicy, null, 2)}</pre></li>
+              <li>Create an access key for that user and save it as <code>PLATFORM_AWS_ACCESS_KEY_ID</code> and <code>PLATFORM_AWS_SECRET_ACCESS_KEY</code> in Project Settings → Secrets. Never paste keys anywhere else.</li>
+              <li>Reload this page — it should show the platform user ARN.</li>
+            </ol>
+          </details>
         </div>
       ) : (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm">
-          <ShieldCheck className="h-4 w-4 text-success" /> Flux Links platform AWS account: <span className="font-mono">{acct}</span>
+          <ShieldCheck className="h-4 w-4 text-success" /> Platform identity OK: <span className="font-mono text-xs">{status.data.platformArn}</span>
         </div>
       )}
 
@@ -164,7 +180,7 @@ function Connections() {
               <Button size="sm" disabled={!c.role_arn || busy === c.id} onClick={() => run(c.id, () => verify({ data: { id: c.id } }), "Connection verified")}>
                 {busy === c.id ? "Working…" : "Verify connection"}
               </Button>
-              <Button size="sm" variant="outline" disabled={c.status !== "verified" || busy === c.id} onClick={() => run(c.id, () => discover({ data: { connectionId: c.id } }), "Buckets discovered")}>
+              <Button size="sm" variant="outline" disabled={c.status !== "verified" || busy === c.id} onClick={() => run(c.id, async () => { const r = await discover({ data: { connectionId: c.id } }); if (!r.count) toast.info("Connected — but no buckets match your role. You can create a private one on Buckets."); }, "Bucket discovery finished")}>
                 Discover buckets
               </Button>
             </li>
