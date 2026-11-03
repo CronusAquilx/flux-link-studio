@@ -52,8 +52,8 @@ function AuthPage() {
     e.preventDefault();
     setNotice(null);
     const em = z.string().email().safeParse(email.trim());
-    if (!em.success) return toast.error("Enter a valid email address");
-    if (mode !== "forgot" && password.length < 8) return toast.error("Password must be at least 8 characters");
+    if (!em.success) return void toast.error("Enter a valid email address");
+    if (mode !== "forgot" && password.length < 8) return void toast.error("Password must be at least 8 characters");
     setBusy(true);
     try {
       if (mode === "signin") {
