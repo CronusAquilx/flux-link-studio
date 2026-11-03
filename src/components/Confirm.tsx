@@ -27,7 +27,10 @@ export const useConfirm = () => useContext(Ctx);
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<(Opts & { resolve: (v: boolean) => void }) | null>(null);
-  const confirm = useCallback((o: Opts) => new Promise<boolean>((resolve) => setState({ ...o, resolve })), []);
+  const confirm = useCallback(
+    (o: Opts) => new Promise<boolean>((resolve) => setState({ ...o, resolve })),
+    [],
+  );
   const close = (v: boolean) => {
     state?.resolve(v);
     setState(null);
@@ -38,7 +41,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       <AlertDialog open={!!state} onOpenChange={(o) => !o && close(false)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <Badge variant={state?.risk === "destructive" ? "destructive" : "secondary"} className="w-fit">
+            <Badge
+              variant={state?.risk === "destructive" ? "destructive" : "secondary"}
+              className="w-fit"
+            >
               {state ? RISK_LABEL[state.risk] : ""}
             </Badge>
             <AlertDialogTitle>{state?.title}</AlertDialogTitle>
@@ -48,7 +54,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => close(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => close(true)}>{state?.confirmLabel ?? "Confirm"}</AlertDialogAction>
+            <AlertDialogAction onClick={() => close(true)}>
+              {state?.confirmLabel ?? "Confirm"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
