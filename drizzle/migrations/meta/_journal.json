@@ -8,6 +8,20 @@
       "when": 1793728513619,
       "tag": "0000_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793728937664,
+      "tag": "0001_profiles_activity_presets_uploads",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793729003168,
+      "tag": "0002_allow_pending_connection_without_role",
+      "breakpoints": true
     }
   ]
 }

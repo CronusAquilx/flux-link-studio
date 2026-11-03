@@ -21,6 +21,7 @@ export const REGIONS = [
 export async function getConnection(sb: Sb, id: string): Promise<ConnectionRow> {
   const { data, error } = await sb.from("aws_connections").select("id,user_id,role_arn,external_id,region").eq("id", id).single();
   if (error || !data) throw new Error("AWS connection not found");
+  if (!data.role_arn) throw new Error("This AWS connection isn't finished — add the Role ARN and verify it.");
   return data;
 }
 
@@ -34,6 +35,7 @@ export async function getBucket(sb: Sb, id: string) {
 
 export async function verifyConnection(sb: Sb, id: string) {
   const conn = await getConnection(sb, id);
+  if (!conn.role_arn) throw new Error("Paste the Role ARN from your AWS stack outputs first.");
   try {
     const { assumedArn } = await assumeRole(conn, [{ actions: ["s3:ListAllMyBuckets"], resources: ["*"] }]);
     const account = assumedArn.split(":")[4] ?? null;
@@ -58,7 +60,7 @@ export async function discoverBuckets(sb: Sb, connectionId: string) {
   return { count: found.length, names: found.map((b) => b.name) };
 }
 
-export async function provisionBucket(sb: Sb, p: { connectionId: string; name: string; region: string; origin?: string }) {
+export async function provisionBucket(sb: Sb, p: { connectionId: string; name: string; region: string; origin?: string | undefined }) {
   if (!BUCKET_RE.test(p.name) || p.name.includes("..")) throw new Error("Invalid bucket name");
   if (!(REGIONS as readonly string[]).includes(p.region)) throw new Error("Unsupported region");
   const conn = await getConnection(sb, p.connectionId);
@@ -111,7 +113,7 @@ export function makeSlug(kind: "flux_v3" | "flux_mini") {
 
 export async function createS3Links(
   sb: Sb,
-  p: { bucketId: string; keys: string[]; kind: "flux_v3" | "flux_mini"; expiresDays?: number | null },
+  p: { bucketId: string; keys: string[]; kind: "flux_v3" | "flux_mini"; expiresDays?: number | null | undefined },
 ) {
   const { bucket } = await getBucket(sb, p.bucketId);
   const expires_at = p.expiresDays ? new Date(Date.now() + p.expiresDays * 86400_000).toISOString() : null;
@@ -131,7 +133,7 @@ export async function createS3Links(
 
 export async function createRule(
   sb: Sb,
-  p: { name: string; bucketId: string; prefix: string; linkKind: "flux_v3" | "flux_mini"; expiresDays?: number | null },
+  p: { name: string; bucketId: string; prefix: string; linkKind: "flux_v3" | "flux_mini"; expiresDays?: number | null | undefined },
 ) {
   await getBucket(sb, p.bucketId);
   const { data, error } = await sb
@@ -141,4 +143,8 @@ export async function createRule(
     .single();
   if (error) throw new Error(error.message);
   return data;
+}
+
+export async function logActivity(sb: Sb, userId: string, action: string, detail: string) {
+  await sb.from("activity").insert({ user_id: userId, action, detail: detail.slice(0, 500) });
 }

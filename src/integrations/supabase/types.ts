@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity: {
+        Row: {
+          action: string
+          created_at: string
+          detail: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          detail?: string
+          id?: string
+          user_id?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          detail?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       assistant_plans: {
         Row: {
           actions: Json
@@ -176,6 +200,7 @@ export type Database = {
           expires_at: string | null
           id: string
           kind: string
+          label: string | null
           object_key: string | null
           revoked: boolean
           sign_seconds: number
@@ -191,6 +216,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           kind: string
+          label?: string | null
           object_key?: string | null
           revoked?: boolean
           sign_seconds?: number
@@ -206,6 +232,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           kind?: string
+          label?: string | null
           object_key?: string | null
           revoked?: boolean
           sign_seconds?: number
@@ -224,9 +251,64 @@ export type Database = {
           },
         ]
       }
+      presets: {
+        Row: {
+          created_at: string
+          expires_days: number | null
+          id: string
+          key_prefix: string
+          link_kind: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_days?: number | null
+          id?: string
+          key_prefix?: string
+          link_kind?: string
+          name: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          expires_days?: number | null
+          id?: string
+          key_prefix?: string
+          link_kind?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          company: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          onboarded: boolean
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          onboarded?: boolean
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          onboarded?: boolean
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           created_at: string
+          disabled: boolean
           id: string
           last_check_status: number | null
           link_id: string | null
@@ -236,6 +318,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          disabled?: boolean
           id?: string
           last_check_status?: number | null
           link_id?: string | null
@@ -245,6 +328,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          disabled?: boolean
           id?: string
           last_check_status?: number | null
           link_id?: string | null
@@ -258,6 +342,41 @@ export type Database = {
             columns: ["link_id"]
             isOneToOne: false
             referencedRelation: "links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      uploads: {
+        Row: {
+          bucket_id: string
+          created_at: string
+          id: string
+          object_key: string
+          size_bytes: number
+          user_id: string
+        }
+        Insert: {
+          bucket_id: string
+          created_at?: string
+          id?: string
+          object_key: string
+          size_bytes?: number
+          user_id?: string
+        }
+        Update: {
+          bucket_id?: string
+          created_at?: string
+          id?: string
+          object_key?: string
+          size_bytes?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uploads_bucket_id_fkey"
+            columns: ["bucket_id"]
+            isOneToOne: false
+            referencedRelation: "buckets"
             referencedColumns: ["id"]
           },
         ]
