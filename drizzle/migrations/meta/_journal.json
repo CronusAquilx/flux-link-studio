@@ -36,6 +36,13 @@
       "when": 1793738695115,
       "tag": "0004_fix_role_arn_regex",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793740397782,
+      "tag": "0005_rate_limits",
+      "breakpoints": true
     }
   ]
 }

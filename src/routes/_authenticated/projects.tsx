@@ -184,8 +184,8 @@ function Projects() {
           return (
             <li key={p.id} className="flex flex-col gap-2 p-3 md:flex-row md:items-center">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{p.name}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="min-w-0 truncate font-medium">{p.name}</span>
                   {p.disabled ? (
                     <Badge variant="destructive">Disabled</Badge>
                   ) : (
