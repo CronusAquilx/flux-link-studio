@@ -34,19 +34,26 @@ export async function getBucket(sb: Sb, id: string) {
   return { bucket: data, conn };
 }
 
+// Status fields are locked against client writes by the aws_connections_guard trigger;
+// only the server (service role) may record verification results, scoped to the owner.
+async function setConnectionStatus(conn: ConnectionRow, patch: { status: string; aws_account_id?: string | null; last_error: string | null; verified_at?: string | null }) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  await supabaseAdmin.from("aws_connections").update(patch).eq("id", conn.id).eq("user_id", conn.user_id);
+}
+
 export async function verifyConnection(sb: Sb, id: string) {
   const conn = await getConnection(sb, id);
   if (!conn.role_arn) throw new Error("Paste the Role ARN from your AWS stack outputs first.");
   try {
     const { assumedArn } = await assumeRole(conn, [{ actions: ["s3:ListAllMyBuckets"], resources: ["*"] }]);
     const account = assumedArn.split(":")[4] ?? null;
-    await sb.from("aws_connections").update({ status: "verified", aws_account_id: account, last_error: null, verified_at: new Date().toISOString() }).eq("id", id);
+    await setConnectionStatus(conn, { status: "verified", aws_account_id: account, last_error: null, verified_at: new Date().toISOString() });
     return { ok: true as const, account };
   } catch (e) {
     const c = classifyAwsError(e);
     // Platform-side problems are the site owner's to fix; don't mark the customer's connection broken for them.
     if (c.kind !== "platform_missing" && c.kind !== "platform_invalid") {
-      await sb.from("aws_connections").update({ status: "error", last_error: c.message }).eq("id", id);
+      await setConnectionStatus(conn, { status: "error", last_error: c.message });
     }
     throw new Error(c.message);
   }
