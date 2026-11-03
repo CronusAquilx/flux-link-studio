@@ -24,6 +24,7 @@ import {
 } from "@/lib/flux.functions";
 import { download, errMsg, log, q } from "@/lib/data";
 import { cloudFormationTemplate } from "@/lib/cfn";
+import { parseRoleArn } from "@/lib/arn";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/connections")({
@@ -84,11 +85,19 @@ function Connections() {
   };
 
   const saveArn = async (id: string) => {
-    const arn = (arns[id] ?? "").trim();
-    if (!/^arn:aws:iam::\d{12}:role\/[\w+=,.@/-]+$/.test(arn))
-      return void toast.error("That doesn't look like a role ARN");
-    const { error } = await supabase.from("aws_connections").update({ role_arn: arn }).eq("id", id);
+    const check = parseRoleArn(arns[id] ?? "");
+    if (!check.ok) return void toast.error(check.reason);
+    const { error } = await supabase
+      .from("aws_connections")
+      .update({ role_arn: check.arn })
+      .eq("id", id);
     if (error) return void toast.error(error.message);
+    // Drop the local draft so the input shows the value the server now holds.
+    setArns((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     refresh();
     toast.success("Role ARN saved — now verify");
   };

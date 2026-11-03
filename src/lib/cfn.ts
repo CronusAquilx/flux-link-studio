@@ -1,3 +1,5 @@
+import { parseUserArn } from "./arn";
+
 // Builds the CloudFormation template a customer deploys in THEIR AWS account.
 // - Trusts ONLY the Flux platform IAM user (not the whole platform account) and ONLY with this connection's External ID.
 // - Role name is unique per connection and matches the platform user's sts:AssumeRole policy (FluxLinksAccess-*).
@@ -9,8 +11,8 @@ export function roleNameFor(externalId: string) {
 
 export function cloudFormationTemplate(platformPrincipalArn: string, externalId: string) {
   // Never emit a wildcard, root, or role trust: only one exact IAM user, and a well-formed External ID.
-  if (!/^arn:aws:iam::\d{12}:user\/[\w+=,.@/-]+$/.test(platformPrincipalArn))
-    throw new Error("Platform identity must be a dedicated IAM user ARN");
+  const principal = parseUserArn(platformPrincipalArn);
+  if (!principal.ok) throw new Error(principal.reason);
   if (!/^[a-f0-9]{32,64}$/.test(externalId)) throw new Error("Invalid External ID");
   return `AWSTemplateFormatVersion: "2010-09-09"
 Description: Flux Links access role (least privilege, External ID protected, no delete or public-access actions)
