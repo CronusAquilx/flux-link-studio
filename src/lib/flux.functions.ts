@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseRoleArn } from "./arn";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   assumeRole,
@@ -74,7 +75,14 @@ export const createConnectionFn = createServerFn({ method: "POST" })
     z
       .object({
         label: z.string().min(1).max(80),
-        roleArn: z.string().max(600).default(""),
+        roleArn: z
+          .string()
+          .max(600)
+          .default("")
+          .superRefine((v, ctx) => {
+            if (v.trim() && !parseRoleArn(v).ok)
+              ctx.addIssue({ code: "custom", message: "That is not a valid IAM role ARN" });
+          }),
         region: z.enum(REGIONS),
       })
       .parse(d),
