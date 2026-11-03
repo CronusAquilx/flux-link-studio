@@ -162,12 +162,7 @@ export const enableBrowserUploadsFn = createServerFn({ method: "POST" })
     z.object({ bucketId: uuid, origin: z.string().url(), confirmed: z.literal(true) }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const r = await enableBrowserUploads(
-      context.supabase,
-      data.bucketId,
-      data.origin,
-      reqOrigin(),
-    );
+    const r = await enableBrowserUploads(context.supabase, data.bucketId, data.origin, reqOrigin());
     await logActivity(
       context.supabase,
       context.userId,
