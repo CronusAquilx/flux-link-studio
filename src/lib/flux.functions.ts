@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getRequest } from "@tanstack/react-start/server";
 import { parseRoleArn } from "./arn";
+import { clientIp, type LimitName } from "./ratelimit.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   assumeRole,
@@ -32,6 +33,10 @@ import {
 
 const uuid = z.string().uuid();
 const kind = z.enum(["flux_v3", "flux_mini"]);
+const limit = async (name: LimitName, userId: string) => {
+  const { enforceRateLimit } = await import("./ratelimit.server");
+  await enforceRateLimit(name, { userId, ip: clientIp(getRequest()?.headers) });
+};
 const reqOrigin = () => getRequest()?.headers.get("origin") ?? null;
 
 export const getSetupStatus = createServerFn({ method: "GET" })
@@ -90,6 +95,7 @@ export const createConnectionFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    await limit("connection", context.userId);
     const { data: row, error } = await context.supabase
       .from("aws_connections")
       .insert({
@@ -108,6 +114,7 @@ export const verifyConnectionFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ id: uuid }).parse(d))
   .handler(async ({ data, context }) => {
+    await limit("aws_read", context.userId);
     const r = await verifyConnection(context.supabase, data.id);
     await logActivity(
       context.supabase,
@@ -122,6 +129,7 @@ export const discoverBucketsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ connectionId: uuid }).parse(d))
   .handler(async ({ data, context }) => {
+    await limit("aws_read", context.userId);
     const r = await discoverBuckets(context.supabase, data.connectionId);
     await logActivity(
       context.supabase,
@@ -146,6 +154,7 @@ export const provisionBucketFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    await limit("aws_write", context.userId);
     const b = await provisionBucket(context.supabase, { ...data, requestOrigin: reqOrigin() });
     await logActivity(
       context.supabase,
@@ -162,6 +171,7 @@ export const enableBrowserUploadsFn = createServerFn({ method: "POST" })
     z.object({ bucketId: uuid, origin: z.string().url(), confirmed: z.literal(true) }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    await limit("aws_write", context.userId);
     const r = await enableBrowserUploads(context.supabase, data.bucketId, data.origin, reqOrigin());
     await logActivity(
       context.supabase,
@@ -178,6 +188,7 @@ export const listObjectsFn = createServerFn({ method: "POST" })
     z.object({ bucketId: uuid, prefix: z.string().max(512).default("") }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    await limit("aws_read", context.userId);
     const { bucket, conn } = await getBucket(context.supabase, data.bucketId);
     const { creds } = await assumeRole(conn, [
       { actions: ["s3:ListBucket"], resources: [`arn:aws:s3:::${bucket.name}`] },
@@ -202,6 +213,7 @@ export const createUploadUrlFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    await limit("upload_sign", context.userId);
     const { bucket, conn } = await getBucket(context.supabase, data.bucketId);
     const key = data.key.replace(/^\/+/, "");
     assertSafeKey(key);
@@ -272,6 +284,7 @@ export const createLinksFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    await limit("links", context.userId);
     const links = await createS3Links(context.supabase, data);
     await logActivity(
       context.supabase,
@@ -297,6 +310,7 @@ export const createRuleFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    await limit("links", context.userId);
     const r = await createRule(context.supabase, data);
     await logActivity(context.supabase, context.userId, "rule.created", r.name);
     return r;
@@ -307,7 +321,8 @@ const LOVABLE_HOST = /^[a-z0-9-]+\.lovable\.app$/i;
 export const checkProjectUrlFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ url: z.string().url() }).parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await limit("project", context.userId);
     const u = new URL(data.url);
     if (
       u.protocol !== "https:" ||
@@ -346,6 +361,7 @@ export const createProjectLinkFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    await limit("project", context.userId);
     const u = new URL(data.url);
     if (
       u.protocol !== "https:" ||
@@ -431,6 +447,7 @@ export const planSetupFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ prompt: z.string().min(3).max(2000) }).parse(d))
   .handler(async ({ data, context }) => {
+    await limit("ai_plan", context.userId);
     const { generateResponse } = await import("@lovable.dev/ai-gateway");
     const [{ data: conns }, { data: buckets }] = await Promise.all([
       context.supabase.from("aws_connections").select("id,label,region,status,role_arn"),
@@ -518,6 +535,7 @@ export const runPlanActionFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    await limit("ai_run", context.userId);
     const sb: Sb = context.supabase;
     const { data: plan, error } = await sb
       .from("assistant_plans")

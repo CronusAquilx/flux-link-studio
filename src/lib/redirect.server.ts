@@ -16,7 +16,17 @@ export function clampSignSeconds(n: number) {
 }
 
 /** Resolve a Flux link. Privileged lookup by unguessable slug only; never returns row data. */
-export async function resolveLink(slug: string, kind: "flux_v3" | "flux_mini") {
+export async function resolveLink(
+  slug: string,
+  kind: "flux_v3" | "flux_mini",
+  headers?: Headers,
+) {
+  try {
+    const { enforceRateLimit, clientIp } = await import("./ratelimit.server");
+    await enforceRateLimit("redirect", { ip: clientIp(headers) });
+  } catch {
+    return page(429, "Slow down", "Too many requests from your network. Try again in a minute.");
+  }
   if (!/^[A-Za-z0-9]{5,32}$/.test(slug))
     return page(404, "Link not found", "This Flux link doesn't exist.");
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
