@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import {
   assumeRole,
+  classifyAwsError,
   createPrivateBucket,
   listBuckets,
   putUploadCors,
@@ -42,16 +43,24 @@ export async function verifyConnection(sb: Sb, id: string) {
     await sb.from("aws_connections").update({ status: "verified", aws_account_id: account, last_error: null, verified_at: new Date().toISOString() }).eq("id", id);
     return { ok: true as const, account };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    await sb.from("aws_connections").update({ status: "error", last_error: msg }).eq("id", id);
-    throw e;
+    const c = classifyAwsError(e);
+    // Platform-side problems are the site owner's to fix; don't mark the customer's connection broken for them.
+    if (c.kind !== "platform_missing" && c.kind !== "platform_invalid") {
+      await sb.from("aws_connections").update({ status: "error", last_error: c.message }).eq("id", id);
+    }
+    throw new Error(c.message);
   }
 }
 
 export async function discoverBuckets(sb: Sb, connectionId: string) {
   const conn = await getConnection(sb, connectionId);
-  const { creds } = await assumeRole(conn, [{ actions: ["s3:ListAllMyBuckets", "s3:GetBucketLocation"], resources: ["*"] }]);
-  const found = await listBuckets(creds);
+  let found: Awaited<ReturnType<typeof listBuckets>>;
+  try {
+    const { creds } = await assumeRole(conn, [{ actions: ["s3:ListAllMyBuckets", "s3:GetBucketLocation"], resources: ["*"] }]);
+    found = await listBuckets(creds);
+  } catch (e) {
+    throw new Error(classifyAwsError(e).message);
+  }
   if (found.length) {
     const rows = found.map((b) => ({ user_id: conn.user_id, connection_id: conn.id, name: b.name, region: b.region }));
     const { error } = await sb.from("buckets").upsert(rows, { onConflict: "user_id,name", ignoreDuplicates: true });
