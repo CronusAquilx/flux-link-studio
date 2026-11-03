@@ -21,6 +21,7 @@ export const REGIONS = [
 export async function getConnection(sb: Sb, id: string): Promise<ConnectionRow> {
   const { data, error } = await sb.from("aws_connections").select("id,user_id,role_arn,external_id,region").eq("id", id).single();
   if (error || !data) throw new Error("AWS connection not found");
+  if (!data.role_arn) throw new Error("This AWS connection isn't finished — add the Role ARN and verify it.");
   return data;
 }
 
@@ -34,6 +35,7 @@ export async function getBucket(sb: Sb, id: string) {
 
 export async function verifyConnection(sb: Sb, id: string) {
   const conn = await getConnection(sb, id);
+  if (!conn.role_arn) throw new Error("Paste the Role ARN from your AWS stack outputs first.");
   try {
     const { assumedArn } = await assumeRole(conn, [{ actions: ["s3:ListAllMyBuckets"], resources: ["*"] }]);
     const account = assumedArn.split(":")[4] ?? null;

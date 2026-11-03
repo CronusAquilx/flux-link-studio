@@ -52,7 +52,7 @@ export const getSetupStatus = createServerFn({ method: "GET" })
 export const createConnectionFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({ label: z.string().min(1).max(80), roleArn: z.string().max(600), region: z.enum(REGIONS) }).parse(d),
+    z.object({ label: z.string().min(1).max(80), roleArn: z.string().max(600).default(""), region: z.enum(REGIONS) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
