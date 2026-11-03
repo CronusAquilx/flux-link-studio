@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as MSlugRouteImport } from './routes/m.$slug'
+import { Route as V3SlugRouteImport } from './routes/v3.$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MSlugRoute = MSlugRouteImport.update({
+  id: '/m/$slug',
+  path: '/m/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const V3SlugRoute = V3SlugRouteImport.update({
+  id: '/v3/$slug',
+  path: '/v3/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/m/$slug': typeof MSlugRoute
+  '/v3/$slug': typeof V3SlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/m/$slug': typeof MSlugRoute
+  '/v3/$slug': typeof V3SlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/m/$slug': typeof MSlugRoute
+  '/v3/$slug': typeof V3SlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/m/$slug' | '/v3/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/m/$slug' | '/v3/$slug'
+  id: '__root__' | '/' | '/m/$slug' | '/v3/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MSlugRoute: typeof MSlugRoute
+  V3SlugRoute: typeof V3SlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/m/$slug': {
+      id: '/m/$slug'
+      path: '/m/$slug'
+      fullPath: '/m/$slug'
+      preLoaderRoute: typeof MSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/v3/$slug': {
+      id: '/v3/$slug'
+      path: '/v3/$slug'
+      fullPath: '/v3/$slug'
+      preLoaderRoute: typeof V3SlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MSlugRoute: MSlugRoute,
+  V3SlugRoute: V3SlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

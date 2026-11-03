@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { resolveLink } from "@/lib/redirect.server";
 
 export const Route = createFileRoute("/m/$slug")({
-  server: { handlers: { GET: async ({ params }) => resolveLink(params.slug, "flux_mini") } },
+  server: {
+    handlers: {
+      GET: async ({ params }) => {
+        const { resolveLink } = await import("@/lib/redirect.server");
+        return resolveLink(params.slug, "flux_mini");
+      },
+    },
+  },
 });
