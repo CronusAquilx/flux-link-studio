@@ -1,7 +1,7 @@
 // Server-only AWS helpers. Flux never stores AWS credentials from users.
-// A broker identity (operator-owned, permitted ONLY sts:AssumeRole) assumes each
-// user's role with that connection's unique External ID, scoped down further by an
-// inline session policy per operation. Temporary credentials live only for the request.
+// Flux's own platform AWS identity (allowed ONLY sts:AssumeRole) assumes each customer's
+// role with that connection's unique External ID, scoped down by an inline session policy
+// per operation. Temporary credentials live only for the duration of one request.
 import { AwsClient } from "aws4fetch";
 
 export type TempCreds = { accessKeyId: string; secretAccessKey: string; sessionToken: string };
@@ -10,27 +10,27 @@ export class SetupRequiredError extends Error {
   code = "SETUP_REQUIRED" as const;
 }
 
-function brokerClient(region: string) {
-  const accessKeyId = process.env["FLUX_BROKER_ACCESS_KEY_ID"];
-  const secretAccessKey = process.env["FLUX_BROKER_SECRET_ACCESS_KEY"];
+function platformClient(region: string) {
+  const accessKeyId = process.env["PLATFORM_AWS_ACCESS_KEY_ID"];
+  const secretAccessKey = process.env["PLATFORM_AWS_SECRET_ACCESS_KEY"];
   if (!accessKeyId || !secretAccessKey) {
     throw new SetupRequiredError(
-      "The Flux AWS broker is not configured yet (FLUX_BROKER_ACCESS_KEY_ID / FLUX_BROKER_SECRET_ACCESS_KEY).",
+      "AWS integration is not configured on this site yet.",
     );
   }
   return new AwsClient({ accessKeyId, secretAccessKey, service: "sts", region });
 }
 
-export function isBrokerConfigured() {
-  return Boolean(process.env["FLUX_BROKER_ACCESS_KEY_ID"] && process.env["FLUX_BROKER_SECRET_ACCESS_KEY"]);
+export function isPlatformConfigured() {
+  return Boolean(process.env["PLATFORM_AWS_ACCESS_KEY_ID"] && process.env["PLATFORM_AWS_SECRET_ACCESS_KEY"]);
 }
 
 export function xmlTag(xml: string, tag: string): string | undefined {
   const m = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
-  return m ? decodeXml(m[1]) : undefined;
+  return m?.[1] !== undefined ? decodeXml(m[1]) : undefined;
 }
 export function xmlAll(xml: string, tag: string): string[] {
-  return [...xml.matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "g"))].map((m) => m[1]);
+  return [...xml.matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "g"))].map((m) => m[1] ?? "");
 }
 function decodeXml(s: string) {
   return s
@@ -48,14 +48,14 @@ async function awsError(res: Response, what: string) {
   return new Error(`${what} failed: ${code} — ${msg}`);
 }
 
-export async function getBrokerIdentity(): Promise<{ arn: string; account: string }> {
-  const client = brokerClient("us-east-1");
+export async function getPlatformIdentity(): Promise<{ arn: string; account: string }> {
+  const client = platformClient("us-east-1");
   const res = await client.fetch("https://sts.amazonaws.com/", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: "Action=GetCallerIdentity&Version=2011-06-15",
   });
-  if (!res.ok) throw await awsError(res, "Broker identity check");
+  if (!res.ok) throw await awsError(res, "Platform identity check");
   const xml = await res.text();
   return { arn: xmlTag(xml, "Arn") ?? "", account: xmlTag(xml, "Account") ?? "" };
 }
@@ -67,7 +67,7 @@ export async function assumeRole(
   conn: ConnectionRow,
   statements: { actions: string[]; resources: string[] }[],
 ): Promise<{ creds: TempCreds; assumedArn: string }> {
-  const client = brokerClient(conn.region);
+  const client = platformClient(conn.region);
   const policy = JSON.stringify({
     Version: "2012-10-17",
     Statement: statements.map((s) => ({ Effect: "Allow", Action: s.actions, Resource: s.resources })),
@@ -149,11 +149,9 @@ export async function createPrivateBucket(creds: TempCreds, bucket: string, regi
     region === "us-east-1"
       ? undefined
       : `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><LocationConstraint>${region}</LocationConstraint></CreateBucketConfiguration>`;
-  const res = await s3(creds, region).fetch(`${bucketHost(bucket, region)}/`, {
-    method: "PUT",
-    headers: { "x-amz-object-ownership": "BucketOwnerEnforced", ...(body ? { "content-type": "application/xml" } : {}) },
-    body,
-  });
+  const init: RequestInit = { method: "PUT", headers: { "x-amz-object-ownership": "BucketOwnerEnforced" } };
+  if (body) init.body = body;
+  const res = await s3(creds, region).fetch(`${bucketHost(bucket, region)}/`, init);
   if (!res.ok) throw await awsError(res, "CreateBucket");
   await putSubresource(
     creds,

@@ -3,8 +3,8 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   assumeRole,
-  getBrokerIdentity,
-  isBrokerConfigured,
+  getPlatformIdentity,
+  isPlatformConfigured,
   listObjects as s3ListObjects,
   presign,
   RECOMMENDED_PERMISSIONS,
@@ -29,20 +29,20 @@ const kind = z.enum(["flux_v3", "flux_mini"]);
 export const getSetupStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
-    const broker = isBrokerConfigured();
-    let brokerArn: string | null = null;
-    let brokerError: string | null = null;
-    if (broker) {
+    const configured = isPlatformConfigured();
+    let platformAccountId: string | null = null;
+    let platformError: string | null = null;
+    if (configured) {
       try {
-        brokerArn = (await getBrokerIdentity()).arn;
+        platformAccountId = (await getPlatformIdentity()).account;
       } catch (e) {
-        brokerError = e instanceof Error ? e.message : String(e);
+        platformError = e instanceof Error ? e.message : String(e);
       }
     }
     return {
-      brokerConfigured: broker,
-      brokerArn,
-      brokerError,
+      awsConfigured: configured,
+      platformAccountId,
+      platformError,
       aiConfigured: Boolean(process.env["LOVABLE_API_KEY"]),
       recommendedPermissions: RECOMMENDED_PERMISSIONS("*"),
     };
@@ -257,7 +257,7 @@ export const planSetupFn = createServerFn({ method: "POST" })
       context.supabase.from("aws_connections").select("id,label,region,status,role_arn"),
       context.supabase.from("buckets").select("id,name,region,browser_uploads,connection_id"),
     ]);
-    const stateJson = JSON.stringify({ connections: conns ?? [], buckets: buckets ?? [], brokerConfigured: isBrokerConfigured() });
+    const stateJson = JSON.stringify({ connections: conns ?? [], buckets: buckets ?? [], awsConfiguredOnSite: isPlatformConfigured() });
     const instructions = `You are the Flux Links setup assistant. Plan concrete setup actions for the user's AWS S3 link-sharing setup.
 Only use these action types: verify_connection{connectionId}, discover_buckets{connectionId}, create_bucket{connectionId,name,region}, enable_browser_uploads{bucketId}, create_rule{name,bucketId,prefix,linkKind:"flux_v3"|"flux_mini",expiresDays:number|null}.
 Only reference ids that exist in the provided state. Never invent ids. Buckets Flux creates are always private. If there is no AWS connection, return no actions and explain the user must add one on the Connections page (Flux never accepts root or access keys — only an IAM role with an External ID).
@@ -289,8 +289,9 @@ Current state: ${stateJson}`;
         const r = actionSchema.safeParse(raw);
         if (!r.success) return null;
         const p = r.data.params as Record<string, unknown>;
-        if (typeof p.connectionId === "string" && !connIds.has(p.connectionId)) return null;
-        if (typeof p.bucketId === "string" && !bucketIds.has(p.bucketId)) return null;
+        const cid = p["connectionId"], bid = p["bucketId"];
+        if (typeof cid === "string" && !connIds.has(cid)) return null;
+        if (typeof bid === "string" && !bucketIds.has(bid)) return null;
         const reason = typeof (raw as { reason?: unknown }).reason === "string" ? (raw as { reason: string }).reason : "";
         return { id: crypto.randomUUID(), ...r.data, reason, risk: RISK[r.data.type], status: "pending", result: null as string | null };
       })

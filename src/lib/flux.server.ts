@@ -58,7 +58,7 @@ export async function discoverBuckets(sb: Sb, connectionId: string) {
   return { count: found.length, names: found.map((b) => b.name) };
 }
 
-export async function provisionBucket(sb: Sb, p: { connectionId: string; name: string; region: string; origin?: string }) {
+export async function provisionBucket(sb: Sb, p: { connectionId: string; name: string; region: string; origin?: string | undefined }) {
   if (!BUCKET_RE.test(p.name) || p.name.includes("..")) throw new Error("Invalid bucket name");
   if (!(REGIONS as readonly string[]).includes(p.region)) throw new Error("Unsupported region");
   const conn = await getConnection(sb, p.connectionId);
@@ -111,7 +111,7 @@ export function makeSlug(kind: "flux_v3" | "flux_mini") {
 
 export async function createS3Links(
   sb: Sb,
-  p: { bucketId: string; keys: string[]; kind: "flux_v3" | "flux_mini"; expiresDays?: number | null },
+  p: { bucketId: string; keys: string[]; kind: "flux_v3" | "flux_mini"; expiresDays?: number | null | undefined },
 ) {
   const { bucket } = await getBucket(sb, p.bucketId);
   const expires_at = p.expiresDays ? new Date(Date.now() + p.expiresDays * 86400_000).toISOString() : null;
@@ -131,7 +131,7 @@ export async function createS3Links(
 
 export async function createRule(
   sb: Sb,
-  p: { name: string; bucketId: string; prefix: string; linkKind: "flux_v3" | "flux_mini"; expiresDays?: number | null },
+  p: { name: string; bucketId: string; prefix: string; linkKind: "flux_v3" | "flux_mini"; expiresDays?: number | null | undefined },
 ) {
   await getBucket(sb, p.bucketId);
   const { data, error } = await sb
