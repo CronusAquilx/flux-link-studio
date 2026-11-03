@@ -70,16 +70,26 @@ describe("Role ARN validation", () => {
 // PostgreSQL rejects repetition counts above 255, which is what broke saving a
 // Role ARN: the guard trigger used `{1,512}` and every write failed.
 describe("Database guard patterns stay PostgreSQL-safe", () => {
-  it("contains no regex repetition count above PostgreSQL's limit of 255", () => {
-    const dir = "drizzle/migrations";
-    const offenders = readdirSync(dir)
+  const dir = "drizzle/migrations";
+  // Comments may quote the old broken pattern, and earlier migrations are
+  // superseded history, so only the newest definition of the guard counts.
+  const codeOf = (f: string) =>
+    readFileSync(`${dir}/${f}`, "utf8")
+      .split("\n")
+      .filter((l) => !l.trim().startsWith("--"))
+      .join("\n");
+
+  it("has a guard definition that PostgreSQL can compile", () => {
+    const defs = readdirSync(dir)
       .filter((f) => f.endsWith(".sql"))
-      .flatMap((f) => {
-        const sql = readFileSync(`${dir}/${f}`, "utf8");
-        return [...sql.matchAll(/\{(\d+),(\d+)\}/g)]
-          .filter(([, , max]) => Number(max) > 255)
-          .map((m) => `${f}: ${m[0]}`);
-      });
+      .sort()
+      .filter((f) => codeOf(f).includes("function public.aws_connections_guard"));
+    expect(defs.length).toBeGreaterThan(0);
+    const current = codeOf(defs.at(-1)!);
+    const offenders = [...current.matchAll(/\{(\d+),(\d+)\}/g)]
+      .filter(([, , max]) => Number(max) > 255)
+      .map((m) => m[0]);
     expect(offenders).toEqual([]);
+    expect(current).toContain("char_length(new.role_arn) > 512");
   });
 });
