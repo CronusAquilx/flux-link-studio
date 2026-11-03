@@ -78,10 +78,11 @@ export function errMsg(e: unknown) {
 }
 
 /** Upload with real byte progress via XHR to a presigned PUT URL. */
-export function putWithProgress(url: string, file: Blob, onProgress: (loaded: number) => void) {
+export function putWithProgress(url: string, file: Blob, onProgress: (loaded: number) => void, contentType?: string) {
   return new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
+    if (contentType) xhr.setRequestHeader("Content-Type", contentType);
     xhr.upload.onprogress = (e) => onProgress(e.loaded);
     xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (HTTP ${xhr.status})`)));
     xhr.onerror = () =>

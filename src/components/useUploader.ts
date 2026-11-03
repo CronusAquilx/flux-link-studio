@@ -23,8 +23,9 @@ export function useUploader() {
       const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
       const key = `${prefix}${rel}`.replace(/^\/+/, "");
       try {
-        const { url } = await sign({ data: { bucketId, key } });
-        await putWithProgress(url, f, (loaded) => setState((s) => ({ ...s, doneBytes: base + loaded })));
+        const contentType = /^[\w.+-]+\/[\w.+-]+$/.test(f.type) ? f.type : "application/octet-stream";
+        const { url } = await sign({ data: { bucketId, key, size: f.size, contentType } });
+        await putWithProgress(url, f, (loaded) => setState((s) => ({ ...s, doneBytes: base + loaded })), contentType);
         await record({ data: { bucketId, key, size: f.size } });
         keys.push(key);
         setState((s) => ({ ...s, doneFiles: s.doneFiles + 1 }));

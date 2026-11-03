@@ -137,14 +137,24 @@ export const listObjectsFn = createServerFn({ method: "POST" })
 
 export const createUploadUrlFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ bucketId: uuid, key: z.string().min(1).max(900) }).parse(d))
+  .inputValidator((d) =>
+    z
+      .object({
+        bucketId: uuid,
+        key: z.string().min(1).max(900),
+        size: z.number().int().min(0).max(MAX_UPLOAD_BYTES),
+        contentType: z.string().max(200).regex(/^[\w.+-]+\/[\w.+-]+$/).default("application/octet-stream"),
+      })
+      .parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { bucket, conn } = await getBucket(context.supabase, data.bucketId);
     const key = data.key.replace(/^\/+/, "");
+    assertSafeKey(key);
     const { creds } = await assumeRole(conn, [
       { actions: ["s3:PutObject"], resources: [`arn:aws:s3:::${bucket.name}/${key}`] },
     ]);
-    return { url: await presign(creds, bucket.name, bucket.region, key, "PUT", 900), key };
+    return { url: await presign(creds, bucket.name, bucket.region, key, "PUT", 900, { contentType: data.contentType, size: data.size }), key, contentType: data.contentType };
   });
 
 /** Called after an upload completes: applies enabled automation rules for that bucket. */

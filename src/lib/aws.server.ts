@@ -127,7 +127,19 @@ export function s3(creds: TempCreds, region: string) {
 }
 
 const encKey = (key: string) => key.split("/").map(encodeURIComponent).join("/");
-export const bucketHost = (bucket: string, region: string) => `https://${bucket}.s3.${region}.amazonaws.com`;
+// Dotted bucket names break virtual-host TLS certificates, so use path-style for them.
+export const bucketHost = (bucket: string, region: string) =>
+  bucket.includes(".") ? `https://s3.${region}.amazonaws.com/${bucket}` : `https://${bucket}.s3.${region}.amazonaws.com`;
+
+/** Object keys must not contain IAM wildcard characters (they'd widen session policies) or path tricks. */
+export function assertSafeKey(key: string) {
+  if (!key || key.length > 900 || /[*?\u0000-\u001f\u007f\\]/.test(key) || key.split("/").some((p) => p === ".." || p === "."))
+    throw new Error("Invalid file name or path.");
+}
+export const MAX_UPLOAD_BYTES = 5 * 1024 ** 3; // S3 single PUT limit
+export const SIGN_MIN = 60;
+export const SIGN_MAX = 7 * 24 * 3600; // SigV4 maximum; also capped by the 15-min role session in practice
+
 
 export async function listBuckets(creds: TempCreds) {
   const res = await s3(creds, "us-east-1").fetch("https://s3.us-east-1.amazonaws.com/?max-buckets=1000");
@@ -216,8 +228,20 @@ export async function presign(
   key: string,
   method: "GET" | "PUT",
   seconds: number,
+  put?: { contentType: string; size: number },
 ) {
-  const url = `${bucketHost(bucket, region)}/${encKey(key)}?X-Amz-Expires=${seconds}`;
+  assertSafeKey(key);
+  const secs = Math.min(SIGN_MAX, Math.max(SIGN_MIN, Math.floor(seconds) || 300));
+  const url = `${bucketHost(bucket, region)}/${encKey(key)}?X-Amz-Expires=${secs}`;
+  if (put) {
+    // Sign Content-Type and Content-Length so the browser can only upload exactly the declared file.
+    const signed = await s3(creds, region).sign(url, {
+      method,
+      headers: { "content-type": put.contentType, "content-length": String(put.size) },
+      aws: { signQuery: true, allHeaders: true },
+    });
+    return signed.url;
+  }
   const signed = await s3(creds, region).sign(url, { method, aws: { signQuery: true } });
   return signed.url;
 }
