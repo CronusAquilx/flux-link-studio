@@ -149,7 +149,7 @@ function Automations() {
           scheduler: files added to the bucket outside Flux Links are not picked up, and a failed
           rule is not retried automatically.
         </p>
-        <div className="grid gap-2 sm:grid-cols-5">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           <Input
             value={r.name}
             onChange={(e) => setR({ ...r, name: e.target.value })}
@@ -217,7 +217,7 @@ function Automations() {
 
       <section className="space-y-3 rounded-lg border border-border bg-card p-4">
         <h2 className="text-sm font-semibold">Saved upload / link presets</h2>
-        <div className="grid gap-2 sm:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Input
             value={p.name}
             onChange={(e) => setP({ ...p, name: e.target.value })}

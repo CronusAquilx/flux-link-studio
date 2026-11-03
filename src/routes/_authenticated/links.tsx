@@ -139,7 +139,7 @@ function Links() {
           return (
             <li key={l.id} className="flex flex-col gap-2 p-3 md:flex-row md:items-center">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <Badge variant="secondary">{l.kind === "flux_v3" ? "V3" : "Mini"}</Badge>
                   {l.revoked ? (
                     <Badge variant="destructive">Revoked</Badge>
@@ -148,7 +148,7 @@ function Links() {
                   ) : (
                     <Badge>Active</Badge>
                   )}
-                  <span className="truncate font-mono text-xs">{linkUrl(l)}</span>
+                  <span className="min-w-0 truncate font-mono text-xs">{linkUrl(l)}</span>
                 </div>
                 <p className="mt-1 truncate text-xs text-muted-foreground">
                   {l.source === "s3"
