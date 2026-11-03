@@ -166,20 +166,48 @@ export async function provisionBucket(
   return data;
 }
 
-export function checkOrigin(origin: string) {
-  const u = new URL(origin);
+/** Validates a browser-upload origin: https only (localhost for dev), no path/userinfo, and it must
+ *  equal the Origin header of the actual request so a caller can't whitelist a third-party site. */
+export function checkOrigin(origin: string, requestOrigin?: string | null) {
+  let u: URL;
+  try {
+    u = new URL(origin);
+  } catch {
+    throw new Error("Invalid origin");
+  }
   if (u.protocol !== "https:" && u.hostname !== "localhost")
     throw new Error("Origin must be https");
+  if (u.username || u.password) throw new Error("Invalid origin");
+  if (requestOrigin !== undefined && requestOrigin !== u.origin)
+    throw new Error("Browser uploads can only be enabled for the site you are using right now.");
   return u.origin;
 }
 
-export async function enableBrowserUploads(sb: Sb, bucketId: string, origin: string) {
-  const o = checkOrigin(origin);
+/** Browser-upload CORS is only ever written to approved flux-* buckets. */
+export function assertCorsBucket(name: string) {
+  if (!name.startsWith("flux-"))
+    throw new Error(
+      `Browser uploads can only be enabled on buckets whose name starts with "flux-" (got "${name}").`,
+    );
+}
+
+export async function enableBrowserUploads(
+  sb: Sb,
+  bucketId: string,
+  origin: string,
+  requestOrigin?: string | null,
+) {
+  const o = checkOrigin(origin, requestOrigin);
   const { bucket, conn } = await getBucket(sb, bucketId);
+  assertCorsBucket(bucket.name);
   const { creds } = await assumeRole(conn, [
     { actions: ["s3:PutBucketCORS"], resources: [`arn:aws:s3:::${bucket.name}`] },
   ]);
-  await putUploadCors(creds, bucket.name, bucket.region, [o]);
+  try {
+    await putUploadCors(creds, bucket.name, bucket.region, [o]);
+  } catch (e) {
+    throw new Error(classifyAwsError(e).message);
+  }
   await sb.from("buckets").update({ browser_uploads: true }).eq("id", bucketId);
   return { ok: true };
 }
