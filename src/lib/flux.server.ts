@@ -123,7 +123,13 @@ export async function discoverBuckets(sb: Sb, connectionId: string) {
 
 export async function provisionBucket(
   sb: Sb,
-  p: { connectionId: string; name: string; region: string; origin?: string | undefined },
+  p: {
+    connectionId: string;
+    name: string;
+    region: string;
+    origin?: string | undefined;
+    requestOrigin?: string | null | undefined;
+  },
 ) {
   if (!BUCKET_RE.test(p.name) || p.name.includes("..")) throw new Error("Invalid bucket name");
   if (!(REGIONS as readonly string[]).includes(p.region)) throw new Error("Unsupported region");
@@ -144,7 +150,8 @@ export async function provisionBucket(
   await createPrivateBucket(creds, p.name, p.region);
   let browserUploads = false;
   if (p.origin) {
-    await putUploadCors(creds, p.name, p.region, [p.origin]);
+    assertCorsBucket(p.name);
+    await putUploadCors(creds, p.name, p.region, [checkOrigin(p.origin, p.requestOrigin)]);
     browserUploads = true;
   }
   const { data, error } = await sb
