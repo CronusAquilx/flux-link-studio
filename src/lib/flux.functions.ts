@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { getRequest } from "@tanstack/react-start/server";
 import { parseRoleArn } from "./arn";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
@@ -31,6 +32,7 @@ import {
 
 const uuid = z.string().uuid();
 const kind = z.enum(["flux_v3", "flux_mini"]);
+const reqOrigin = () => getRequest()?.headers.get("origin") ?? null;
 
 export const getSetupStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -144,7 +146,7 @@ export const provisionBucketFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const b = await provisionBucket(context.supabase, data);
+    const b = await provisionBucket(context.supabase, { ...data, requestOrigin: reqOrigin() });
     await logActivity(
       context.supabase,
       context.userId,
@@ -160,7 +162,12 @@ export const enableBrowserUploadsFn = createServerFn({ method: "POST" })
     z.object({ bucketId: uuid, origin: z.string().url(), confirmed: z.literal(true) }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const r = await enableBrowserUploads(context.supabase, data.bucketId, data.origin);
+    const r = await enableBrowserUploads(
+      context.supabase,
+      data.bucketId,
+      data.origin,
+      reqOrigin(),
+    );
     await logActivity(
       context.supabase,
       context.userId,
@@ -220,10 +227,17 @@ export const createUploadUrlFn = createServerFn({ method: "POST" })
 export const recordUploadFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({ bucketId: uuid, key: z.string().min(1), size: z.number().int().min(0) }).parse(d),
+    z
+      .object({
+        bucketId: uuid,
+        key: z.string().min(1).max(900),
+        size: z.number().int().min(0).max(MAX_UPLOAD_BYTES),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     await getBucket(context.supabase, data.bucketId);
+    assertSafeKey(data.key);
     await context.supabase.from("uploads").insert({
       user_id: context.userId,
       bucket_id: data.bucketId,
@@ -546,12 +560,16 @@ export const runPlanActionFn = createServerFn({ method: "POST" })
           break;
         }
         case "create_bucket": {
-          const b = await provisionBucket(sb, { ...checked.params, origin: data.origin });
+          const b = await provisionBucket(sb, {
+            ...checked.params,
+            origin: data.origin,
+            requestOrigin: reqOrigin(),
+          });
           a.result = `Created private bucket ${b.name}`;
           break;
         }
         case "enable_browser_uploads":
-          await enableBrowserUploads(sb, checked.params.bucketId, data.origin);
+          await enableBrowserUploads(sb, checked.params.bucketId, data.origin, reqOrigin());
           a.result = "Browser uploads enabled for this app's origin";
           break;
         case "create_rule": {
