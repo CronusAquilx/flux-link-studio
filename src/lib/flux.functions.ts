@@ -20,6 +20,7 @@ import {
   REGIONS,
   verifyConnection,
   BUCKET_RE,
+  logActivity,
   type Sb,
 } from "./flux.server";
 
@@ -66,12 +67,20 @@ export const createConnectionFn = createServerFn({ method: "POST" })
 export const verifyConnectionFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ id: uuid }).parse(d))
-  .handler(async ({ data, context }) => verifyConnection(context.supabase, data.id));
+  .handler(async ({ data, context }) => {
+    const r = await verifyConnection(context.supabase, data.id);
+    await logActivity(context.supabase, context.userId, "connection.verified", `AWS account ${r.account}`);
+    return r;
+  });
 
 export const discoverBucketsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ connectionId: uuid }).parse(d))
-  .handler(async ({ data, context }) => discoverBuckets(context.supabase, data.connectionId));
+  .handler(async ({ data, context }) => {
+    const r = await discoverBuckets(context.supabase, data.connectionId);
+    await logActivity(context.supabase, context.userId, "buckets.discovered", `${r.count} bucket(s)`);
+    return r;
+  });
 
 export const provisionBucketFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -86,12 +95,20 @@ export const provisionBucketFn = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data, context }) => provisionBucket(context.supabase, data));
+  .handler(async ({ data, context }) => {
+    const b = await provisionBucket(context.supabase, data);
+    await logActivity(context.supabase, context.userId, "bucket.created", `${b.name} (${b.region}, private)`);
+    return b;
+  });
 
 export const enableBrowserUploadsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ bucketId: uuid, origin: z.string().url(), confirmed: z.literal(true) }).parse(d))
-  .handler(async ({ data, context }) => enableBrowserUploads(context.supabase, data.bucketId, data.origin));
+  .handler(async ({ data, context }) => {
+    const r = await enableBrowserUploads(context.supabase, data.bucketId, data.origin);
+    await logActivity(context.supabase, context.userId, "bucket.cors", `Browser uploads enabled for ${data.origin}`);
+    return r;
+  });
 
 export const listObjectsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -117,8 +134,10 @@ export const createUploadUrlFn = createServerFn({ method: "POST" })
 /** Called after an upload completes: applies enabled automation rules for that bucket. */
 export const recordUploadFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ bucketId: uuid, key: z.string().min(1) }).parse(d))
+  .inputValidator((d) => z.object({ bucketId: uuid, key: z.string().min(1), size: z.number().int().min(0) }).parse(d))
   .handler(async ({ data, context }) => {
+    await getBucket(context.supabase, data.bucketId);
+    await context.supabase.from("uploads").insert({ user_id: context.userId, bucket_id: data.bucketId, object_key: data.key, size_bytes: data.size });
     const { data: rules } = await context.supabase
       .from("automation_rules")
       .select("*")
@@ -151,7 +170,11 @@ export const createLinksFn = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data, context }) => createS3Links(context.supabase, data));
+  .handler(async ({ data, context }) => {
+    const links = await createS3Links(context.supabase, data);
+    await logActivity(context.supabase, context.userId, "links.created", `${links.length} ${data.kind === "flux_v3" ? "Flux V3" : "Flux Mini"} link(s)`);
+    return links;
+  });
 
 export const createRuleFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -167,7 +190,11 @@ export const createRuleFn = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data, context }) => createRule(context.supabase, data));
+  .handler(async ({ data, context }) => {
+    const r = await createRule(context.supabase, data);
+    await logActivity(context.supabase, context.userId, "rule.created", r.name);
+    return r;
+  });
 
 const LOVABLE_HOST = /^[a-z0-9-]+\.lovable\.app$/i;
 
@@ -213,6 +240,7 @@ export const createProjectLinkFn = createServerFn({ method: "POST" })
       .select()
       .single();
     if (e2) throw new Error(e2.message);
+    await logActivity(context.supabase, context.userId, "project.linked", `${data.name} → ${u.hostname}`);
     return { project: proj, link };
   });
 
@@ -358,6 +386,7 @@ export const runPlanActionFn = createServerFn({ method: "POST" })
         }
       }
       a.status = "done";
+      await logActivity(sb, context.userId, `ai.${checked.type}`, a.result ?? "");
     } catch (e) {
       a.status = "failed";
       a.result = e instanceof Error ? e.message : String(e);

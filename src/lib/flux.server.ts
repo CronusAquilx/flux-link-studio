@@ -142,3 +142,7 @@ export async function createRule(
   if (error) throw new Error(error.message);
   return data;
 }
+
+export async function logActivity(sb: Sb, userId: string, action: string, detail: string) {
+  await sb.from("activity").insert({ user_id: userId, action, detail: detail.slice(0, 500) });
+}
