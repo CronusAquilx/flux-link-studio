@@ -346,6 +346,24 @@ export type Database = {
           },
         ]
       }
+      rate_limit_hits: {
+        Row: {
+          count: number
+          key: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          key: string
+          window_start: string
+        }
+        Update: {
+          count?: number
+          key?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       uploads: {
         Row: {
           bucket_id: string
@@ -387,6 +405,10 @@ export type Database = {
     }
     Functions: {
       flux_random_hex: { Args: never; Returns: string }
+      flux_rate_limit_hit: {
+        Args: { _key: string; _max: number; _window_seconds: number }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
