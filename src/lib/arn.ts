@@ -26,11 +26,20 @@ export type ArnResult = { ok: true; arn: string } | { ok: false; reason: string 
 
 const reject = (reason: string): ArnResult => ({ ok: false, reason });
 
+type ArnParts = {
+  partition: string;
+  service: string;
+  region: string;
+  account: string;
+  resource: string;
+};
+
 /**
  * Splits `arn:partition:service:region:account:resource` and checks the shared
  * shape: 6 colon-separated parts, no whitespace, no control characters, sane length.
+ * An empty region is kept as-is because IAM ARNs legitimately have none.
  */
-function splitArn(input: string, what: string): ArnResult | string[] {
+function splitArn(input: string, what: string): ArnResult | ArnParts {
   const arn = input.trim();
   if (!arn) return reject(`Paste the ${what} from your AWS console.`);
   if (arn.length > ARN_MAX) return reject(`A ${what} is at most ${ARN_MAX} characters.`);
@@ -42,7 +51,13 @@ function splitArn(input: string, what: string): ArnResult | string[] {
     return reject(
       `A ${what} has 6 colon-separated parts, like arn:aws:iam::123456789012:role/Name`,
     );
-  return parts;
+  return {
+    partition: parts[1] ?? "",
+    service: parts[2] ?? "",
+    region: parts[3] ?? "",
+    account: parts[4] ?? "",
+    resource: parts[5] ?? "",
+  };
 }
 
 function checkAccount(account: string): ArnResult | null {
@@ -58,8 +73,8 @@ function checkAccount(account: string): ArnResult | null {
  */
 export function parseRoleArn(input: string): ArnResult {
   const parsed = splitArn(input, "role ARN");
-  if (!Array.isArray(parsed)) return parsed;
-  const [, partition, service, region, account, resource] = parsed;
+  if ("ok" in parsed) return parsed;
+  const { partition, service, region, account, resource } = parsed;
   if (partition !== "aws") return reject("Only standard AWS partitions are supported.");
   if (service !== "iam") return reject("A role ARN's service part must be iam.");
   if (region !== "")
@@ -84,8 +99,8 @@ export function parseRoleArn(input: string): ArnResult {
 /** Validates an IAM **user** ARN — the platform identity our site signs in as. */
 export function parseUserArn(input: string): ArnResult {
   const parsed = splitArn(input, "IAM user ARN");
-  if (!Array.isArray(parsed)) return parsed;
-  const [, partition, service, region, account, resource] = parsed;
+  if ("ok" in parsed) return parsed;
+  const { partition, service, region, account, resource } = parsed;
   if (partition !== "aws") return reject("Only standard AWS partitions are supported.");
   if (service !== "iam") return reject("A user ARN's service part must be iam.");
   if (region !== "") return reject("IAM user ARNs have no region.");

@@ -17,8 +17,7 @@ describe("Role ARN validation", () => {
   it("trims surrounding whitespace and stores the trimmed ARN", () => {
     const r = parseRoleArn("  arn:aws:iam::123456789012:role/FluxLinksAccess-ab12cd34ef56 \n");
     expect(r.ok).toBe(true);
-    if (r.ok)
-      expect(r.arn).toBe("arn:aws:iam::123456789012:role/FluxLinksAccess-ab12cd34ef56");
+    if (r.ok) expect(r.arn).toBe("arn:aws:iam::123456789012:role/FluxLinksAccess-ab12cd34ef56");
   });
 
   it("rejects a missing or empty ARN", () => {
