@@ -55,8 +55,8 @@ function Dashboard() {
   }, [fresh, links, shownBucket]);
 
   const makeLink = async () => {
-    if (!activeBucket) return toast.error("Connect AWS and add a bucket first");
-    if (!files.length) return toast.error("Choose files or a folder to upload");
+    if (!activeBucket) return void toast.error("Connect AWS and add a bucket first");
+    if (!files.length) return void toast.error("Choose files or a folder to upload");
     const prefix = name.trim() ? `${name.trim().replace(/[^\w.\- /]/g, "").replace(/\/+$/, "")}/` : "";
     const ok = await confirm({
       risk: "public",
@@ -66,7 +66,7 @@ function Dashboard() {
     });
     if (!ok) return;
     const keys = await upload(activeBucket, files, prefix);
-    if (!keys.length) return toast.error("No files uploaded");
+    if (!keys.length) return void toast.error("No files uploaded");
     try {
       const made = await createLinks({ data: { bucketId: activeBucket, keys, kind, confirmed: true } });
       setPanelBucket(activeBucket);
@@ -83,7 +83,7 @@ function Dashboard() {
     setBusy(id);
     try {
       const objs = (await listObjects({ data: { bucketId: id, prefix: "" } })).filter((o) => !o.key.endsWith("/"));
-      if (!objs.length) return toast.info("This bucket has no files yet");
+      if (!objs.length) return void toast.info("This bucket has no files yet");
       const ok = await confirm({
         risk: "public",
         title: `Create ${objs.length} ${kind === "flux_v3" ? "Flux V3" : "Flux Mini"} link(s)?`,

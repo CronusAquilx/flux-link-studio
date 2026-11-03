@@ -54,9 +54,9 @@ function Connections() {
 
   const saveArn = async (id: string) => {
     const arn = (arns[id] ?? "").trim();
-    if (!/^arn:aws:iam::\d{12}:role\/[\w+=,.@/-]+$/.test(arn)) return toast.error("That doesn't look like a role ARN");
+    if (!/^arn:aws:iam::\d{12}:role\/[\w+=,.@/-]+$/.test(arn)) return void toast.error("That doesn't look like a role ARN");
     const { error } = await supabase.from("aws_connections").update({ role_arn: arn }).eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return void toast.error(error.message);
     refresh();
     toast.success("Role ARN saved — now verify");
   };
@@ -79,7 +79,7 @@ function Connections() {
     const ok = await confirm({ risk: "destructive", title: `Remove "${name}"?`, body: "Flux Links forgets this connection and its buckets and links stop working. Nothing in your AWS account is deleted — remove the IAM role there yourself if you want.", confirmLabel: "Remove" });
     if (!ok) return;
     const { error } = await supabase.from("aws_connections").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return void toast.error(error.message);
     await log("connection.removed", name);
     refresh();
     qc.invalidateQueries({ queryKey: ["buckets"] });
