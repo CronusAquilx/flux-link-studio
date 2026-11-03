@@ -10,6 +10,11 @@ function page(status: number, title: string, msg: string) {
   );
 }
 
+/** Signed URLs live 60s–1h: rows are owner-writable and STS session credentials expire after 1h anyway. */
+export function clampSignSeconds(n: number) {
+  return Math.min(3600, Math.max(60, Number.isFinite(n) ? Math.floor(n) : 300));
+}
+
 /** Resolve a Flux link. Privileged lookup by unguessable slug only; never returns row data. */
 export async function resolveLink(slug: string, kind: "flux_v3" | "flux_mini") {
   if (!/^[A-Za-z0-9]{5,32}$/.test(slug))
@@ -70,7 +75,7 @@ export async function resolveLink(slug: string, kind: "flux_v3" | "flux_mini") {
         bucket.region,
         link.object_key,
         "GET",
-        link.sign_seconds,
+        clampSignSeconds(link.sign_seconds),
       );
     } catch {
       return page(

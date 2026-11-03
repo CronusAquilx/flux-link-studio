@@ -144,6 +144,11 @@ function Automations() {
       <h1 className="text-xl font-semibold">Automations</h1>
       <section className="space-y-3 rounded-lg border border-border bg-card p-4">
         <h2 className="text-sm font-semibold">Trigger: upload complete → generate link</h2>
+        <p className="text-xs text-muted-foreground">
+          Rules run right after a file finishes uploading through Flux Links. There is no background
+          scheduler: files added to the bucket outside Flux Links are not picked up, and a failed
+          rule is not retried automatically.
+        </p>
         <div className="grid gap-2 sm:grid-cols-5">
           <Input
             value={r.name}
