@@ -14,13 +14,260 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      assistant_plans: {
+        Row: {
+          actions: Json
+          created_at: string
+          id: string
+          prompt: string
+          summary: string
+          user_id: string
+        }
+        Insert: {
+          actions?: Json
+          created_at?: string
+          id?: string
+          prompt: string
+          summary?: string
+          user_id?: string
+        }
+        Update: {
+          actions?: Json
+          created_at?: string
+          id?: string
+          prompt?: string
+          summary?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      automation_rules: {
+        Row: {
+          bucket_id: string
+          created_at: string
+          enabled: boolean
+          expires_days: number | null
+          id: string
+          link_kind: string
+          name: string
+          prefix: string
+          user_id: string
+        }
+        Insert: {
+          bucket_id: string
+          created_at?: string
+          enabled?: boolean
+          expires_days?: number | null
+          id?: string
+          link_kind?: string
+          name: string
+          prefix?: string
+          user_id?: string
+        }
+        Update: {
+          bucket_id?: string
+          created_at?: string
+          enabled?: boolean
+          expires_days?: number | null
+          id?: string
+          link_kind?: string
+          name?: string
+          prefix?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_rules_bucket_id_fkey"
+            columns: ["bucket_id"]
+            isOneToOne: false
+            referencedRelation: "buckets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      aws_connections: {
+        Row: {
+          aws_account_id: string | null
+          created_at: string
+          external_id: string
+          id: string
+          label: string
+          last_error: string | null
+          region: string
+          role_arn: string
+          status: string
+          user_id: string
+          verified_at: string | null
+        }
+        Insert: {
+          aws_account_id?: string | null
+          created_at?: string
+          external_id?: string
+          id?: string
+          label: string
+          last_error?: string | null
+          region?: string
+          role_arn: string
+          status?: string
+          user_id?: string
+          verified_at?: string | null
+        }
+        Update: {
+          aws_account_id?: string | null
+          created_at?: string
+          external_id?: string
+          id?: string
+          label?: string
+          last_error?: string | null
+          region?: string
+          role_arn?: string
+          status?: string
+          user_id?: string
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
+      buckets: {
+        Row: {
+          browser_uploads: boolean
+          connection_id: string
+          discovered_at: string
+          id: string
+          name: string
+          provisioned_by_flux: boolean
+          region: string
+          user_id: string
+        }
+        Insert: {
+          browser_uploads?: boolean
+          connection_id: string
+          discovered_at?: string
+          id?: string
+          name: string
+          provisioned_by_flux?: boolean
+          region: string
+          user_id?: string
+        }
+        Update: {
+          browser_uploads?: boolean
+          connection_id?: string
+          discovered_at?: string
+          id?: string
+          name?: string
+          provisioned_by_flux?: boolean
+          region?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "buckets_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "aws_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      links: {
+        Row: {
+          bucket_id: string | null
+          clicks: number
+          created_at: string
+          expires_at: string | null
+          id: string
+          kind: string
+          object_key: string | null
+          revoked: boolean
+          sign_seconds: number
+          slug: string
+          source: string
+          target_url: string | null
+          user_id: string
+        }
+        Insert: {
+          bucket_id?: string | null
+          clicks?: number
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          kind: string
+          object_key?: string | null
+          revoked?: boolean
+          sign_seconds?: number
+          slug: string
+          source: string
+          target_url?: string | null
+          user_id?: string
+        }
+        Update: {
+          bucket_id?: string | null
+          clicks?: number
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          kind?: string
+          object_key?: string | null
+          revoked?: boolean
+          sign_seconds?: number
+          slug?: string
+          source?: string
+          target_url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "links_bucket_id_fkey"
+            columns: ["bucket_id"]
+            isOneToOne: false
+            referencedRelation: "buckets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string
+          id: string
+          last_check_status: number | null
+          link_id: string | null
+          lovable_url: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_check_status?: number | null
+          link_id?: string | null
+          lovable_url: string
+          name: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_check_status?: number | null
+          link_id?: string | null
+          lovable_url?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      flux_random_hex: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
