@@ -19,7 +19,12 @@ export async function resolveLink(slug: string, kind: "flux_v3" | "flux_mini") {
   let target: string;
   if (link.source === "project") {
     if (!link.target_url) return page(404, "Link not found", "No destination.");
-    target = link.target_url;
+    // Links rows are user-writable, so re-validate here: only published https *.lovable.app destinations (no open redirect).
+    let u: URL;
+    try { u = new URL(link.target_url); } catch { return page(404, "Link not found", "Invalid destination."); }
+    if (u.protocol !== "https:" || !(u.hostname === "lovable.app" || u.hostname.endsWith(".lovable.app")))
+      return page(404, "Link not found", "Invalid destination.");
+    target = u.toString();
   } else {
     const { data: bucket } = await supabaseAdmin.from("buckets").select("*").eq("id", link.bucket_id!).maybeSingle();
     if (!bucket || bucket.user_id !== link.user_id || !link.object_key) return page(404, "Link not found", "File unavailable.");
